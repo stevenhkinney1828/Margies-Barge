@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { sendEmail } from "../lib/sendEmail.js";
+import { urgentIssueHtml, bookingRemovedHtml, mondaySummaryHtml } from "../lib/emails.js";
 import {
   activityEntriesTable,
   bookingsTable,
@@ -399,7 +401,17 @@ router.delete("/bookings/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Booking not found" });
     return;
   }
+  const removedAt = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   await db.insert(activityEntriesTable).values({ personName: booking.personName, action: `removed booking ${dateOnly(booking.startDate)} to ${dateOnly(booking.endDate)}`, actionDate: new Date().toISOString().slice(0, 10) });
+  const [settingsRowForBooking] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
+  const bookingEmails = settingsRowForBooking?.familyEmails ?? [];
+  if (bookingEmails.length > 0) {
+    sendEmail({
+      to: bookingEmails,
+      subject: `📅 Lake House Booking Removed by ${booking.personName}`,
+      html: bookingRemovedHtml({ personName: booking.personName, startDate: dateOnly(booking.startDate) ?? "", endDate: dateOnly(booking.endDate) ?? "", removedAt }),
+    }).catch(() => void 0);
+  }
   res.sendStatus(204);
 });
 
@@ -458,6 +470,17 @@ router.post("/issues", async (req, res): Promise<void> => {
   }
   const [issue] = await db.insert(issuesTable).values({ ...body.data, status: "open" }).returning();
   await db.insert(activityEntriesTable).values({ personName: body.data.personName, action: `${body.data.urgent ? "flagged urgent issue" : "posted issue"}: ${body.data.caption}`, actionDate: new Date().toISOString().slice(0, 10) });
+  if (body.data.urgent) {
+    const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
+    const emails = settingsRow?.familyEmails ?? [];
+    if (emails.length > 0) {
+      sendEmail({
+        to: emails,
+        subject: `🚨 Urgent Issue at the Lake House: ${body.data.caption}`,
+        html: urgentIssueHtml({ reportedBy: body.data.personName, caption: body.data.caption, photoUrl: body.data.photoUrl }),
+      }).catch(() => void 0);
+    }
+  }
   res.status(201).json({ ...issue, resolvedAt: iso(issue.resolvedAt), createdAt: iso(issue.createdAt) });
 });
 
@@ -482,6 +505,37 @@ router.get("/activity", async (_req, res): Promise<void> => {
   await ensureBootstrap();
   const entries = await db.select().from(activityEntriesTable).orderBy(desc(activityEntriesTable.createdAt)).limit(100);
   res.json(ListActivityResponse.parse(entries.map((entry) => ({ ...entry, actionDate: dateOnly(entry.actionDate), createdAt: iso(entry.createdAt) }))));
+});
+
+router.post("/email/monday-summary", async (_req, res): Promise<void> => {
+  await ensureBootstrap();
+  const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
+  const settings = settingsResponse(settingsRow);
+  const emails = settings.familyEmails;
+  if (emails.length === 0) {
+    res.status(400).json({ sent: false, error: "No family emails configured in Settings." });
+    return;
+  }
+  const [lakeLevel, tasks, issues, bookings] = await Promise.all([
+    fetchLake(settings),
+    db.select().from(tasksTable).orderBy(tasksTable.id),
+    db.select().from(issuesTable).where(eq(issuesTable.status, "open")),
+    db.select().from(bookingsTable).where(gte(bookingsTable.startDate, new Date().toISOString().slice(0, 10))).orderBy(bookingsTable.startDate).limit(10),
+  ]);
+  const overdueTasks = tasks.filter((t) => taskStatus(t) === "overdue").map((t) => ({ icon: t.icon, name: t.name }));
+  const dueSoonTasks = tasks.filter((t) => taskStatus(t) === "due-soon").map((t) => ({ icon: t.icon, name: t.name }));
+  const urgentIssues = issues.filter((i) => i.urgent).length;
+  const upcomingBookings = bookings.map((b) => ({ personName: b.personName, startDate: dateOnly(b.startDate) ?? "", endDate: dateOnly(b.endDate) ?? "" }));
+  const result = await sendEmail({
+    to: emails,
+    subject: `⚓ Kinney Lake House — Monday Morning Report`,
+    html: mondaySummaryHtml({ lakeElevation: lakeLevel.elevation, lakeStatus: lakeLevel.status, overdueTasks, dueSoonTasks, openIssues: issues.length, urgentIssues, upcomingBookings }),
+  });
+  if (result.sent) {
+    res.json({ sent: true, recipients: emails.length });
+  } else {
+    res.status(500).json({ sent: false, error: result.error });
+  }
 });
 
 export default router;
