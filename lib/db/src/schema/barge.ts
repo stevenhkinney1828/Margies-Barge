@@ -40,6 +40,8 @@ export const dockAdjustmentsTable = pgTable("barge_dock_adjustments", {
   id: serial("id").primaryKey(),
   personName: text("person_name").notNull(),
   workDate: date("work_date").notNull(),
+  clearanceUp: numeric("clearance_up", { precision: 6, scale: 2 }),
+  clearanceDown: numeric("clearance_down", { precision: 6, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

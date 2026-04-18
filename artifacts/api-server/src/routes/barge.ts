@@ -130,6 +130,17 @@ function settingsResponse(row: typeof settingsTable.$inferSelect) {
   };
 }
 
+function dockAdjustmentResponse(adjustment: typeof dockAdjustmentsTable.$inferSelect) {
+  return {
+    id: adjustment.id,
+    personName: adjustment.personName,
+    workDate: dateOnly(adjustment.workDate),
+    clearanceUp: adjustment.clearanceUp == null ? null : Number(adjustment.clearanceUp),
+    clearanceDown: adjustment.clearanceDown == null ? null : Number(adjustment.clearanceDown),
+    createdAt: iso(adjustment.createdAt),
+  };
+}
+
 function parseActiveMonths(activeMonths: string | null | undefined): { start: number | null; end: number | null } {
   if (!activeMonths) return { start: null, end: null };
   const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -225,7 +236,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     lakeLevel,
     lakeHistory,
     weather,
-    lastDockAdjustment: lastDockAdjustment ? { id: lastDockAdjustment.id, personName: lastDockAdjustment.personName, workDate: dateOnly(lastDockAdjustment.workDate), createdAt: iso(lastDockAdjustment.createdAt) } : null,
+    lastDockAdjustment: lastDockAdjustment ? dockAdjustmentResponse(lastDockAdjustment) : null,
   }));
 });
 
@@ -303,9 +314,18 @@ router.post("/dock-adjustments", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
-  const [adjustment] = await db.insert(dockAdjustmentsTable).values({ personName: body.data.personName, workDate: body.data.workDate }).returning();
-  await db.insert(activityEntriesTable).values({ personName: body.data.personName, action: "adjusted the dock", actionDate: body.data.workDate });
-  res.status(201).json({ id: adjustment.id, personName: adjustment.personName, workDate: dateOnly(adjustment.workDate), createdAt: iso(adjustment.createdAt) });
+  const [adjustment] = await db.insert(dockAdjustmentsTable).values({
+    personName: body.data.personName,
+    workDate: body.data.workDate,
+    clearanceUp: String(body.data.clearanceUp),
+    clearanceDown: String(body.data.clearanceDown),
+  }).returning();
+  await db.insert(activityEntriesTable).values({
+    personName: body.data.personName,
+    action: `adjusted the dock (${body.data.clearanceUp}' up / ${body.data.clearanceDown}' down)`,
+    actionDate: body.data.workDate,
+  });
+  res.status(201).json(dockAdjustmentResponse(adjustment));
 });
 
 router.get("/bookings", async (_req, res): Promise<void> => {

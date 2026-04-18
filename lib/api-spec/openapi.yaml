@@ -124,7 +124,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CompletionCreate"
+              $ref: "#/components/schemas/DockAdjustmentCreate"
       responses:
         "201":
           description: Dock adjustment
@@ -381,9 +381,25 @@ components:
           type: string
         workDate:
           type: string
+        clearanceUp:
+          type: ["number", "null"]
+        clearanceDown:
+          type: ["number", "null"]
         createdAt:
           type: string
-      required: [id, personName, workDate, createdAt]
+      required: [id, personName, workDate, clearanceUp, clearanceDown, createdAt]
+    DockAdjustmentCreate:
+      type: object
+      properties:
+        personName:
+          type: string
+        workDate:
+          type: string
+        clearanceUp:
+          type: number
+        clearanceDown:
+          type: number
+      required: [personName, workDate, clearanceUp, clearanceDown]
     Dashboard:
       type: object
       properties:
@@ -408,9 +424,13 @@ components:
               type: string
             workDate:
               type: string
+            clearanceUp:
+              type: ["number", "null"]
+            clearanceDown:
+              type: ["number", "null"]
             createdAt:
               type: string
-          required: [id, personName, workDate, createdAt]
+          required: [id, personName, workDate, clearanceUp, clearanceDown, createdAt]
       required: [settings, lakeLevel, lakeHistory, weather, lastDockAdjustment]
     Task:
       type: object

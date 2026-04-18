@@ -6,13 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface DockAdjustment {
-  id: number;
+export interface DockAdjustmentCreate {
   personName: string;
   workDate: string;
-  /** @nullable */
-  clearanceUp: number | null;
-  /** @nullable */
-  clearanceDown: number | null;
-  createdAt: string;
+  clearanceUp: number;
+  clearanceDown: number;
 }

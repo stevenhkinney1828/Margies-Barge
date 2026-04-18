@@ -17,6 +17,8 @@ export function DockTab() {
   const [isOpen, setIsOpen] = useState(false);
   const [personName, setPersonName] = useState("");
   const [workDate, setWorkDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [clearanceUp, setClearanceUp] = useState("");
+  const [clearanceDown, setClearanceDown] = useState("");
 
   if (isLoading) return <div className="p-4 flex justify-center"><div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" /></div>;
   if (error || !dashboard) return <div className="p-4 text-destructive">Failed to load dashboard</div>;
@@ -25,15 +27,22 @@ export function DockTab() {
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!personName) return;
+    if (!personName || !clearanceUp || !clearanceDown) return;
     
     await createDockAdjustment.mutateAsync({
-      data: { personName, workDate }
+      data: {
+        personName,
+        workDate,
+        clearanceUp: Number(clearanceUp),
+        clearanceDown: Number(clearanceDown)
+      }
     });
     
     queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
     setIsOpen(false);
     setPersonName("");
+    setClearanceUp("");
+    setClearanceDown("");
   };
 
   const getStatusColor = (status: string) => {
@@ -102,6 +111,18 @@ export function DockTab() {
               <div>
                 <p className="font-serif text-lg">{format(new Date(lastDockAdjustment.workDate), "MMM d, yyyy")}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">by {lastDockAdjustment.personName}</p>
+                {lastDockAdjustment.clearanceUp != null && lastDockAdjustment.clearanceDown != null && (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="rounded-md bg-amber-50 border border-amber-100 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wider font-sans text-amber-700">Logged Up</p>
+                      <p className="font-serif text-base text-amber-800">{lastDockAdjustment.clearanceUp.toFixed(1)}'</p>
+                    </div>
+                    <div className="rounded-md bg-red-50 border border-red-100 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wider font-sans text-red-700">Logged Down</p>
+                      <p className="font-serif text-base text-red-800">{lastDockAdjustment.clearanceDown.toFixed(1)}'</p>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-sm italic text-muted-foreground">No recent adjustments logged.</p>
@@ -117,6 +138,9 @@ export function DockTab() {
                 <DialogTitle className="font-serif text-xl">Log Dock Adjustment</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleAdjust} className="space-y-4 mt-4">
+                <p className="text-sm text-muted-foreground">
+                  No need to look up today&apos;s lake level — the app pulls that automatically. Just log when the dock was moved and the clearance you saw.
+                </p>
                 <div className="space-y-2">
                   <Label htmlFor="personName">Who moved it?</Label>
                   <Input 
@@ -136,6 +160,36 @@ export function DockTab() {
                     onChange={(e) => setWorkDate(e.target.value)} 
                     required 
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="clearanceUp">Feet up</Label>
+                    <Input
+                      id="clearanceUp"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      inputMode="decimal"
+                      value={clearanceUp}
+                      onChange={(e) => setClearanceUp(e.target.value)}
+                      placeholder="5.0"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="clearanceDown">Feet down</Label>
+                    <Input
+                      id="clearanceDown"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      inputMode="decimal"
+                      value={clearanceDown}
+                      onChange={(e) => setClearanceDown(e.target.value)}
+                      placeholder="6.0"
+                      required
+                    />
+                  </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={createDockAdjustment.isPending}>
                   {createDockAdjustment.isPending ? "Logging..." : "Save Adjustment"}
@@ -197,30 +251,24 @@ export function DockTab() {
 
       {/* Weather Forecast */}
       <Card className="shadow-sm overflow-hidden">
-        <CardHeader className="bg-muted/30 pb-3 border-b border-border/50">
+        <CardHeader className="bg-muted/30 py-3 border-b border-border/50">
           <CardTitle className="text-sm font-sans uppercase tracking-wider text-muted-foreground flex items-center space-x-2">
-            <span>Weather Forecast</span>
+            <span>Forecast</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="divide-y divide-border/50">
+        <CardContent className="p-3">
+          <div className="grid grid-cols-4 gap-2">
             {weather.map((day, i) => (
-              <div key={i} className="flex items-center p-3 sm:p-4">
-                <div className="w-16 shrink-0">
-                  <p className="text-sm font-bold font-sans">{i === 0 ? "Today" : day.name}</p>
-                </div>
-                <div className="w-12 h-12 mx-2 shrink-0 rounded-full overflow-hidden bg-muted/50">
-                  <img src={day.icon} alt={day.shortForecast} className="w-full h-full object-cover" />
-                </div>
-                <div className="flex-1 min-w-0 pr-2">
-                  <p className="text-xs text-muted-foreground truncate">{day.shortForecast}</p>
-                  {day.rainProbability > 0 && (
-                    <p className="text-[10px] text-blue-600 font-semibold mt-0.5">{day.rainProbability}% Rain</p>
-                  )}
-                </div>
-                <div className="text-right shrink-0 pl-2">
-                  <p className="text-lg font-serif">{day.highTemp}°</p>
-                </div>
+              <div key={i} className="rounded-lg border border-border/60 bg-background p-2 text-center min-h-[78px]">
+                <p className="text-[11px] font-bold font-sans truncate">{i === 0 ? "Today" : day.name.slice(0, 3)}</p>
+                <p className="text-lg font-serif leading-tight mt-1">{day.highTemp}°</p>
+                {day.rainProbability > 0 ? (
+                  <p className={`text-[10px] font-semibold mt-1 ${day.rainProbability > 60 ? "text-amber-700" : "text-blue-600"}`}>
+                    {day.rainProbability}% rain
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground mt-1 truncate">{day.shortForecast}</p>
+                )}
               </div>
             ))}
           </div>

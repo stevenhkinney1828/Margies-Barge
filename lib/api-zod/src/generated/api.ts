@@ -53,6 +53,8 @@ export const GetDashboardResponse = zod.object({
       id: zod.number(),
       personName: zod.string(),
       workDate: zod.string(),
+      clearanceUp: zod.number().nullable(),
+      clearanceDown: zod.number().nullable(),
       createdAt: zod.string(),
     })
     .nullable(),
@@ -142,6 +144,8 @@ export const CompleteTaskResponse = zod.object({
 export const CreateDockAdjustmentBody = zod.object({
   personName: zod.string(),
   workDate: zod.string(),
+  clearanceUp: zod.number(),
+  clearanceDown: zod.number(),
 });
 
 /**

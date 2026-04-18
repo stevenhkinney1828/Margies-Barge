@@ -16,6 +16,7 @@ export * from "./completionCreate";
 export * from "./dashboard";
 export * from "./dashboardLastDockAdjustment";
 export * from "./dockAdjustment";
+export * from "./dockAdjustmentCreate";
 export * from "./healthStatus";
 export * from "./issue";
 export * from "./issueCreate";

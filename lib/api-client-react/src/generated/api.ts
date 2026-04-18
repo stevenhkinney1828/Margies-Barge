@@ -26,6 +26,7 @@ import type {
   CompletionCreate,
   Dashboard,
   DockAdjustment,
+  DockAdjustmentCreate,
   HealthStatus,
   Issue,
   IssueCreate,
@@ -601,14 +602,14 @@ export const getCreateDockAdjustmentUrl = () => {
 };
 
 export const createDockAdjustment = async (
-  completionCreate: CompletionCreate,
+  dockAdjustmentCreate: DockAdjustmentCreate,
   options?: RequestInit,
 ): Promise<DockAdjustment> => {
   return customFetch<DockAdjustment>(getCreateDockAdjustmentUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(completionCreate),
+    body: JSON.stringify(dockAdjustmentCreate),
   });
 };
 
@@ -619,14 +620,14 @@ export const getCreateDockAdjustmentMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createDockAdjustment>>,
     TError,
-    { data: BodyType<CompletionCreate> },
+    { data: BodyType<DockAdjustmentCreate> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createDockAdjustment>>,
   TError,
-  { data: BodyType<CompletionCreate> },
+  { data: BodyType<DockAdjustmentCreate> },
   TContext
 > => {
   const mutationKey = ["createDockAdjustment"];
@@ -640,7 +641,7 @@ export const getCreateDockAdjustmentMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createDockAdjustment>>,
-    { data: BodyType<CompletionCreate> }
+    { data: BodyType<DockAdjustmentCreate> }
   > = (props) => {
     const { data } = props ?? {};
 
@@ -653,7 +654,7 @@ export const getCreateDockAdjustmentMutationOptions = <
 export type CreateDockAdjustmentMutationResult = NonNullable<
   Awaited<ReturnType<typeof createDockAdjustment>>
 >;
-export type CreateDockAdjustmentMutationBody = BodyType<CompletionCreate>;
+export type CreateDockAdjustmentMutationBody = BodyType<DockAdjustmentCreate>;
 export type CreateDockAdjustmentMutationError = ErrorType<unknown>;
 
 /**
@@ -666,14 +667,14 @@ export const useCreateDockAdjustment = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createDockAdjustment>>,
     TError,
-    { data: BodyType<CompletionCreate> },
+    { data: BodyType<DockAdjustmentCreate> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof createDockAdjustment>>,
   TError,
-  { data: BodyType<CompletionCreate> },
+  { data: BodyType<DockAdjustmentCreate> },
   TContext
 > => {
   return useMutation(getCreateDockAdjustmentMutationOptions(options));

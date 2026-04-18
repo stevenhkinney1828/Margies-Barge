@@ -58,7 +58,18 @@ export interface DockAdjustment {
   id: number;
   personName: string;
   workDate: string;
+  /** @nullable */
+  clearanceUp: number | null;
+  /** @nullable */
+  clearanceDown: number | null;
   createdAt: string;
+}
+
+export interface DockAdjustmentCreate {
+  personName: string;
+  workDate: string;
+  clearanceUp: number;
+  clearanceDown: number;
 }
 
 /**
@@ -68,6 +79,10 @@ export type DashboardLastDockAdjustment = {
   id: number;
   personName: string;
   workDate: string;
+  /** @nullable */
+  clearanceUp: number | null;
+  /** @nullable */
+  clearanceDown: number | null;
   createdAt: string;
 } | null;
 

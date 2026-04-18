@@ -13,5 +13,9 @@ export type DashboardLastDockAdjustment = {
   id: number;
   personName: string;
   workDate: string;
+  /** @nullable */
+  clearanceUp: number | null;
+  /** @nullable */
+  clearanceDown: number | null;
   createdAt: string;
 } | null;
