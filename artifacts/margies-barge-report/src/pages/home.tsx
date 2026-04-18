@@ -6,67 +6,71 @@ import { BringTab } from "@/components/tabs/bring-tab";
 import { IssuesTab } from "@/components/tabs/issues-tab";
 import { LogTab } from "@/components/tabs/log-tab";
 import { SettingsDialog } from "@/components/settings-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Anchor, CheckSquare, Calendar, ShoppingBag, AlertTriangle, ScrollText } from "lucide-react";
 
+const TABS = [
+  { id: "dock",     label: "Dock",     icon: Anchor },
+  { id: "tasks",    label: "Tasks",    icon: CheckSquare },
+  { id: "calendar", label: "Calendar", icon: Calendar },
+  { id: "bring",    label: "Bring",    icon: ShoppingBag },
+  { id: "issues",   label: "Issues",   icon: AlertTriangle },
+  { id: "log",      label: "Log",      icon: ScrollText },
+] as const;
+
+type TabId = typeof TABS[number]["id"];
+
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("dock");
+  const [activeTab, setActiveTab] = useState<TabId>("dock");
 
   return (
     <div className="flex justify-center w-full min-h-screen bg-background">
       <div className="w-full max-w-[430px] min-h-screen bg-background flex flex-col relative shadow-2xl overflow-hidden ring-1 ring-border/50">
-        
-        {/* Navy Header */}
-        <header className="bg-primary text-primary-foreground pt-12 pb-4 px-6 shadow-sm z-10 shrink-0 flex justify-between items-start">
-          <div>
-            <h1 className="font-serif text-2xl tracking-tight">Kinney Lake House</h1>
-            <p className="text-primary-foreground/70 text-sm font-sans mt-0.5">Margie's Barge Report</p>
+
+        {/* Navy Header with inline tab strip */}
+        <header className="bg-primary text-primary-foreground pt-10 shadow-md z-10 shrink-0">
+          <div className="flex justify-between items-start px-5 pb-3">
+            <div>
+              <h1 className="font-serif text-2xl tracking-tight">Kinney Lake House</h1>
+              <p className="text-primary-foreground/70 text-sm font-sans mt-0.5">Margie's Barge Report</p>
+            </div>
+            <SettingsDialog />
           </div>
-          <SettingsDialog />
+
+          {/* Tab strip inside header */}
+          <div className="flex overflow-x-auto scrollbar-hide border-t border-primary-foreground/20">
+            {TABS.map(({ id, label, icon: Icon }) => {
+              const active = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 min-w-[56px] py-2.5 text-[10px] font-sans font-medium tracking-wide transition-colors relative shrink-0 ${
+                    active
+                      ? "text-primary-foreground"
+                      : "text-primary-foreground/55 hover:text-primary-foreground/80"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" strokeWidth={active ? 2.5 : 2} />
+                  <span>{label}</span>
+                  {active && (
+                    <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary-foreground rounded-full" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </header>
 
-        {/* Content Area */}
-        <main className="flex-1 overflow-y-auto pb-24 px-4 pt-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full">
-            <TabsContent value="dock" className="m-0 h-full data-[state=inactive]:hidden"><DockTab /></TabsContent>
-            <TabsContent value="tasks" className="m-0 h-full data-[state=inactive]:hidden"><TasksTab /></TabsContent>
-            <TabsContent value="calendar" className="m-0 h-full data-[state=inactive]:hidden"><CalendarTab /></TabsContent>
-            <TabsContent value="bring" className="m-0 h-full data-[state=inactive]:hidden"><BringTab /></TabsContent>
-            <TabsContent value="issues" className="m-0 h-full data-[state=inactive]:hidden"><IssuesTab /></TabsContent>
-            <TabsContent value="log" className="m-0 h-full data-[state=inactive]:hidden"><LogTab /></TabsContent>
-          </Tabs>
+        {/* Scrollable content */}
+        <main className="flex-1 overflow-y-auto pb-8 px-4 pt-5">
+          {activeTab === "dock"     && <DockTab />}
+          {activeTab === "tasks"    && <TasksTab />}
+          {activeTab === "calendar" && <CalendarTab />}
+          {activeTab === "bring"    && <BringTab />}
+          {activeTab === "issues"   && <IssuesTab />}
+          {activeTab === "log"      && <LogTab />}
         </main>
-
-        {/* Bottom Navigation */}
-        <nav className="absolute bottom-0 left-0 right-0 bg-card border-t border-border/40 pb-safe z-20 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
-          <div className="flex items-center justify-between px-2 pt-2 pb-1 h-[68px]">
-            <NavItem active={activeTab === "dock"} onClick={() => setActiveTab("dock")} icon={<Anchor className="w-5 h-5" />} label="Dock" />
-            <NavItem active={activeTab === "tasks"} onClick={() => setActiveTab("tasks")} icon={<CheckSquare className="w-5 h-5" />} label="Tasks" />
-            <NavItem active={activeTab === "calendar"} onClick={() => setActiveTab("calendar")} icon={<Calendar className="w-5 h-5" />} label="Calendar" />
-            <NavItem active={activeTab === "bring"} onClick={() => setActiveTab("bring")} icon={<ShoppingBag className="w-5 h-5" />} label="Bring" />
-            <NavItem active={activeTab === "issues"} onClick={() => setActiveTab("issues")} icon={<AlertTriangle className="w-5 h-5" />} label="Issues" />
-            <NavItem active={activeTab === "log"} onClick={() => setActiveTab("log")} icon={<ScrollText className="w-5 h-5" />} label="Log" />
-          </div>
-        </nav>
       </div>
     </div>
-  );
-}
-
-function NavItem({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center justify-center w-[64px] h-[54px] rounded-lg transition-colors active-elevate no-default-active-elevate ${
-        active ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-      }`}
-    >
-      <div className={`mb-1 transition-transform ${active ? "scale-110" : ""}`}>
-        {icon}
-      </div>
-      <span className={`text-[10px] leading-none font-medium ${active ? "font-bold" : ""}`}>
-        {label}
-      </span>
-    </button>
   );
 }
