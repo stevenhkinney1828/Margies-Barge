@@ -55,6 +55,8 @@ export const GetDashboardResponse = zod.object({
       workDate: zod.string(),
       clearanceUp: zod.number().nullable(),
       clearanceDown: zod.number().nullable(),
+      lakeElevation: zod.number().nullable(),
+      lakeLevelPulledAt: zod.string().nullable(),
       createdAt: zod.string(),
     })
     .nullable(),

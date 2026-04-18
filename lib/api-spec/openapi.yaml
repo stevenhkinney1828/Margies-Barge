@@ -385,9 +385,13 @@ components:
           type: ["number", "null"]
         clearanceDown:
           type: ["number", "null"]
+        lakeElevation:
+          type: ["number", "null"]
+        lakeLevelPulledAt:
+          type: ["string", "null"]
         createdAt:
           type: string
-      required: [id, personName, workDate, clearanceUp, clearanceDown, createdAt]
+      required: [id, personName, workDate, clearanceUp, clearanceDown, lakeElevation, lakeLevelPulledAt, createdAt]
     DockAdjustmentCreate:
       type: object
       properties:
@@ -428,9 +432,13 @@ components:
               type: ["number", "null"]
             clearanceDown:
               type: ["number", "null"]
+            lakeElevation:
+              type: ["number", "null"]
+            lakeLevelPulledAt:
+              type: ["string", "null"]
             createdAt:
               type: string
-          required: [id, personName, workDate, clearanceUp, clearanceDown, createdAt]
+          required: [id, personName, workDate, clearanceUp, clearanceDown, lakeElevation, lakeLevelPulledAt, createdAt]
       required: [settings, lakeLevel, lakeHistory, weather, lastDockAdjustment]
     Task:
       type: object

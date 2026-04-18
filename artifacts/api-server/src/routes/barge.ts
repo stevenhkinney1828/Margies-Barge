@@ -137,6 +137,8 @@ function dockAdjustmentResponse(adjustment: typeof dockAdjustmentsTable.$inferSe
     workDate: dateOnly(adjustment.workDate),
     clearanceUp: adjustment.clearanceUp == null ? null : Number(adjustment.clearanceUp),
     clearanceDown: adjustment.clearanceDown == null ? null : Number(adjustment.clearanceDown),
+    lakeElevation: adjustment.lakeElevation == null ? null : Number(adjustment.lakeElevation),
+    lakeLevelPulledAt: iso(adjustment.lakeLevelPulledAt),
     createdAt: iso(adjustment.createdAt),
   };
 }
@@ -168,6 +170,32 @@ async function fetchLake(settings: { safeLow: number; safeHigh: number }) {
     return { elevation, pulledAt, status, percentSafe: Number(percentSafe.toFixed(1)), clearanceDown, clearanceUp, stale };
   } catch (error) {
     return { elevation: 1065.96, pulledAt: new Date(0).toISOString(), status: "WARNING" as const, percentSafe: 54.2, clearanceDown: 5.96, clearanceUp: 5.04, stale: true };
+  }
+}
+
+async function fetchLakeLevelForDate(workDate: string): Promise<{ elevation: number; pulledAt: string } | null> {
+  const start = new Date(`${workDate}T00:00:00.000Z`);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  const url = `https://waterservices.usgs.gov/nwis/iv/?sites=02334480&parameterCd=00062&format=json&startDT=${workDate}&endDT=${end.toISOString().slice(0, 10)}`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`USGS daily lookup returned ${response.status}`);
+    const json = await response.json() as { value?: { timeSeries?: Array<{ values?: Array<{ value?: Array<{ value: string; dateTime: string }> }> }> } };
+    const values = json.value?.timeSeries?.[0]?.values?.[0]?.value ?? [];
+    if (values.length === 0) return null;
+    const noon = new Date(`${workDate}T12:00:00.000Z`).getTime();
+    const closest = values.reduce((best, item) => {
+      const bestDistance = Math.abs(new Date(best.dateTime).getTime() - noon);
+      const itemDistance = Math.abs(new Date(item.dateTime).getTime() - noon);
+      return itemDistance < bestDistance ? item : best;
+    });
+    return {
+      elevation: Number(Number(closest.value).toFixed(2)),
+      pulledAt: closest.dateTime,
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -314,15 +342,24 @@ router.post("/dock-adjustments", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
+  const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
+  const settings = settingsResponse(settingsRow);
+  const today = new Date().toISOString().slice(0, 10);
+  const historicalLake = await fetchLakeLevelForDate(body.data.workDate);
+  const currentLake = historicalLake == null && body.data.workDate === today ? await fetchLake(settings) : null;
+  const lakeForDate = historicalLake ?? (currentLake == null ? null : { elevation: currentLake.elevation, pulledAt: currentLake.pulledAt });
   const [adjustment] = await db.insert(dockAdjustmentsTable).values({
     personName: body.data.personName,
     workDate: body.data.workDate,
     clearanceUp: String(body.data.clearanceUp),
     clearanceDown: String(body.data.clearanceDown),
+    lakeElevation: lakeForDate == null ? null : String(lakeForDate.elevation),
+    lakeLevelPulledAt: lakeForDate == null ? null : new Date(lakeForDate.pulledAt),
   }).returning();
+  const lakeNote = lakeForDate == null ? "" : ` at lake level ${lakeForDate.elevation}'`;
   await db.insert(activityEntriesTable).values({
     personName: body.data.personName,
-    action: `adjusted the dock (${body.data.clearanceUp}' up / ${body.data.clearanceDown}' down)`,
+    action: `adjusted the dock (${body.data.clearanceUp}' up / ${body.data.clearanceDown}' down${lakeNote})`,
     actionDate: body.data.workDate,
   });
   res.status(201).json(dockAdjustmentResponse(adjustment));

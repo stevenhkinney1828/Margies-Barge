@@ -42,6 +42,8 @@ export const dockAdjustmentsTable = pgTable("barge_dock_adjustments", {
   workDate: date("work_date").notNull(),
   clearanceUp: numeric("clearance_up", { precision: 6, scale: 2 }),
   clearanceDown: numeric("clearance_down", { precision: 6, scale: 2 }),
+  lakeElevation: numeric("lake_elevation", { precision: 8, scale: 2 }),
+  lakeLevelPulledAt: timestamp("lake_level_pulled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

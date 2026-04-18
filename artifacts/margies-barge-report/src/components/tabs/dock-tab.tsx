@@ -24,6 +24,10 @@ export function DockTab() {
   if (error || !dashboard) return <div className="p-4 text-destructive">Failed to load dashboard</div>;
 
   const { lakeLevel, weather, lastDockAdjustment, lakeHistory, settings } = dashboard;
+  const lastAdjustmentDate = lastDockAdjustment?.workDate?.slice(0, 10);
+  const today = format(new Date(), "yyyy-MM-dd");
+  const displayedLoggedLakeLevel = lastDockAdjustment?.lakeElevation ?? (lastAdjustmentDate === today ? lakeLevel.elevation : null);
+  const displayedLoggedLakePulledAt = lastDockAdjustment?.lakeLevelPulledAt ?? (lastAdjustmentDate === today ? lakeLevel.pulledAt : null);
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +115,19 @@ export function DockTab() {
               <div>
                 <p className="font-serif text-lg">{format(new Date(lastDockAdjustment.workDate), "MMM d, yyyy")}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">by {lastDockAdjustment.personName}</p>
+                <div className="mt-3 rounded-md bg-blue-50 border border-blue-100 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider font-sans text-blue-700">Lake level that day</p>
+                  <p className="font-serif text-base text-blue-900">
+                    {displayedLoggedLakeLevel == null
+                      ? "Not available"
+                      : `${displayedLoggedLakeLevel.toFixed(2)}'`}
+                  </p>
+                  {displayedLoggedLakePulledAt && (
+                    <p className="text-[10px] text-blue-700/80 mt-0.5">
+                      USGS reading from {format(new Date(displayedLoggedLakePulledAt), "MMM d, h:mm a")}
+                    </p>
+                  )}
+                </div>
                 {lastDockAdjustment.clearanceUp != null && lastDockAdjustment.clearanceDown != null && (
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <div className="rounded-md bg-amber-50 border border-amber-100 px-3 py-2">
@@ -139,7 +156,7 @@ export function DockTab() {
               </DialogHeader>
               <form onSubmit={handleAdjust} className="space-y-4 mt-4">
                 <p className="text-sm text-muted-foreground">
-                  No need to look up today&apos;s lake level — the app pulls that automatically. Just log when the dock was moved and the clearance you saw.
+                  No need to look up the lake level — the app pulls the USGS reading for the date you choose. Just log when the dock was moved and the clearance you saw.
                 </p>
                 <div className="space-y-2">
                   <Label htmlFor="personName">Who moved it?</Label>

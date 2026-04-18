@@ -62,6 +62,10 @@ export interface DockAdjustment {
   clearanceUp: number | null;
   /** @nullable */
   clearanceDown: number | null;
+  /** @nullable */
+  lakeElevation: number | null;
+  /** @nullable */
+  lakeLevelPulledAt: string | null;
   createdAt: string;
 }
 
@@ -83,6 +87,10 @@ export type DashboardLastDockAdjustment = {
   clearanceUp: number | null;
   /** @nullable */
   clearanceDown: number | null;
+  /** @nullable */
+  lakeElevation: number | null;
+  /** @nullable */
+  lakeLevelPulledAt: string | null;
   createdAt: string;
 } | null;
 
