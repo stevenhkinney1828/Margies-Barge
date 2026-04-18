@@ -1,22 +1,20 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Margie's Barge Report API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: barge
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +22,557 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [barge]
+      summary: Get dock dashboard data
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [barge]
+      summary: Get app settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    patch:
+      operationId: updateSettings
+      tags: [barge]
+      summary: Update app settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [barge]
+      summary: List maintenance tasks
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [barge]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreate"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+  /tasks/{id}/complete:
+    post:
+      operationId: completeTask
+      tags: [barge]
+      summary: Mark a task done
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletionCreate"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+  /dock-adjustments:
+    post:
+      operationId: createDockAdjustment
+      tags: [barge]
+      summary: Log dock adjustment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletionCreate"
+      responses:
+        "201":
+          description: Dock adjustment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DockAdjustment"
+  /bookings:
+    get:
+      operationId: listBookings
+      tags: [barge]
+      summary: List lake house bookings
+      responses:
+        "200":
+          description: Bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+    post:
+      operationId: createBooking
+      tags: [barge]
+      summary: Create booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingCreate"
+      responses:
+        "201":
+          description: Created booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+  /bookings/{id}:
+    delete:
+      operationId: deleteBooking
+      tags: [barge]
+      summary: Remove booking
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Removed
+  /bring-items:
+    get:
+      operationId: listBringItems
+      tags: [barge]
+      summary: List bring-next-time items
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BringItem"
+    post:
+      operationId: createBringItem
+      tags: [barge]
+      summary: Add bring item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BringItemCreate"
+      responses:
+        "201":
+          description: Created item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BringItem"
+  /bring-items/{id}:
+    delete:
+      operationId: deleteBringItem
+      tags: [barge]
+      summary: Mark bring item brought
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BringItemDelete"
+      responses:
+        "204":
+          description: Removed
+  /issues:
+    get:
+      operationId: listIssues
+      tags: [barge]
+      summary: List issues
+      parameters:
+        - name: includeResolved
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Issues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Issue"
+    post:
+      operationId: createIssue
+      tags: [barge]
+      summary: Create issue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueCreate"
+      responses:
+        "201":
+          description: Created issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+  /issues/{id}/resolve:
+    post:
+      operationId: resolveIssue
+      tags: [barge]
+      summary: Resolve issue
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueResolve"
+      responses:
+        "200":
+          description: Resolved issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [barge]
+      summary: List activity log
+      responses:
+        "200":
+          description: Activity entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEntry"
 components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
   schemas:
     HealthStatus:
       type: object
       properties:
         status:
           type: string
-      required:
-        - status
-
+      required: [status]
+    Settings:
+      type: object
+      properties:
+        safeLow:
+          type: number
+        safeHigh:
+          type: number
+        familyEmails:
+          type: array
+          items:
+            type: string
+      required: [safeLow, safeHigh, familyEmails]
+    SettingsUpdate:
+      type: object
+      properties:
+        safeLow:
+          type: number
+        safeHigh:
+          type: number
+        familyEmails:
+          type: array
+          items:
+            type: string
+    LakeLevel:
+      type: object
+      properties:
+        elevation:
+          type: number
+        pulledAt:
+          type: string
+        status:
+          type: string
+          enum: [ALL CLEAR, WARNING, DANGER]
+        percentSafe:
+          type: number
+        clearanceDown:
+          type: number
+        clearanceUp:
+          type: number
+        stale:
+          type: boolean
+      required: [elevation, pulledAt, status, percentSafe, clearanceDown, clearanceUp, stale]
+    LakeHistoryPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        elevation:
+          type: number
+      required: [date, elevation]
+    WeatherDay:
+      type: object
+      properties:
+        date:
+          type: string
+        name:
+          type: string
+        shortForecast:
+          type: string
+        icon:
+          type: string
+        highTemp:
+          type: integer
+        rainProbability:
+          type: integer
+      required: [date, name, shortForecast, icon, highTemp, rainProbability]
+    DockAdjustment:
+      type: object
+      properties:
+        id:
+          type: integer
+        personName:
+          type: string
+        workDate:
+          type: string
+        createdAt:
+          type: string
+      required: [id, personName, workDate, createdAt]
+    Dashboard:
+      type: object
+      properties:
+        settings:
+          $ref: "#/components/schemas/Settings"
+        lakeLevel:
+          $ref: "#/components/schemas/LakeLevel"
+        lakeHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/LakeHistoryPoint"
+        weather:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherDay"
+        lastDockAdjustment:
+          type: [object, 'null']
+          properties:
+            id:
+              type: integer
+            personName:
+              type: string
+            workDate:
+              type: string
+            createdAt:
+              type: string
+          required: [id, personName, workDate, createdAt]
+      required: [settings, lakeLevel, lakeHistory, weather, lastDockAdjustment]
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        icon:
+          type: string
+        name:
+          type: string
+        cadenceDays:
+          type: integer
+        cadenceLabel:
+          type: string
+        activeMonths:
+          type: [string, 'null']
+        lastDoneDate:
+          type: [string, 'null']
+        lastDoneBy:
+          type: [string, 'null']
+        nextDueDate:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [good, due-soon, overdue, seasonal]
+        notes:
+          type: [string, 'null']
+      required: [id, icon, name, cadenceDays, cadenceLabel, activeMonths, lastDoneDate, lastDoneBy, nextDueDate, status, notes]
+    TaskCreate:
+      type: object
+      properties:
+        icon:
+          type: string
+        name:
+          type: string
+        cadenceDays:
+          type: integer
+        activeMonths:
+          type: [string, 'null']
+      required: [icon, name, cadenceDays]
+    CompletionCreate:
+      type: object
+      properties:
+        personName:
+          type: string
+        workDate:
+          type: string
+      required: [personName, workDate]
+    Booking:
+      type: object
+      properties:
+        id:
+          type: integer
+        personName:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        googleEventId:
+          type: [string, 'null']
+        createdAt:
+          type: string
+      required: [id, personName, startDate, endDate, googleEventId, createdAt]
+    BookingCreate:
+      type: object
+      properties:
+        personName:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        spokeWithUncles:
+          type: boolean
+        spokeWithCousins:
+          type: boolean
+      required: [personName, startDate, endDate, spokeWithUncles, spokeWithCousins]
+    BringItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        personName:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+      required: [id, personName, description, createdAt]
+    BringItemCreate:
+      type: object
+      properties:
+        personName:
+          type: string
+        description:
+          type: string
+      required: [personName, description]
+    BringItemDelete:
+      type: object
+      properties:
+        personName:
+          type: string
+        broughtDate:
+          type: string
+      required: [personName, broughtDate]
+    Issue:
+      type: object
+      properties:
+        id:
+          type: integer
+        personName:
+          type: string
+        caption:
+          type: string
+        photoUrl:
+          type: string
+        urgent:
+          type: boolean
+        status:
+          type: string
+          enum: [open, resolved]
+        resolutionNote:
+          type: [string, 'null']
+        resolvedBy:
+          type: [string, 'null']
+        resolvedAt:
+          type: [string, 'null']
+        createdAt:
+          type: string
+      required: [id, personName, caption, photoUrl, urgent, status, resolutionNote, resolvedBy, resolvedAt, createdAt]
+    IssueCreate:
+      type: object
+      properties:
+        personName:
+          type: string
+        caption:
+          type: string
+        photoUrl:
+          type: string
+        urgent:
+          type: boolean
+      required: [personName, caption, photoUrl, urgent]
+    IssueResolve:
+      type: object
+      properties:
+        personName:
+          type: string
+        resolutionNote:
+          type: string
+      required: [personName, resolutionNote]
+    ActivityEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        personName:
+          type: string
+        action:
+          type: string
+        actionDate:
+          type: string
+        createdAt:
+          type: string
+      required: [id, personName, action, actionDate, createdAt]
