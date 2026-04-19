@@ -1,0 +1,33 @@
+Please pre-populate the app with the following real data. Do not wipe any existing structure, just insert this data into the correct tables:
+
+1. LAKE THRESHOLDS (update admin settings)
+   - Low limit: 1059.8 ft
+   - High limit: 1068.8 ft
+
+2. FAMILY MEMBERS (insert all seven, all with App Access and Monday Email checked, all with Notifications checked)
+   - Steven Kinney | stevenhkinney@gmail.com
+   - Charles "Cheese" Kinney | clkinney.12@gmail.com
+   - Mike Kinney | kinneyjm57@gmail.com
+   - Lance Thompson | clt06@ymail.com
+   - Kevin Kinney | kkinney818@gmail.com
+   - Travis Kinney | traviskinneywde@gmail.com
+   - David Kinney | davidkinney140@gmail.com
+
+3. TASKS -- update last completed date and who did it for each:
+   - Bug Spray | last done: February 14, 2026 | by: Kevin Kinney | cadence: 90 days
+   - Weed Whacking | last done: April 17, 2026 | by: Cheese | cadence: 30 days | active months: April through September
+   - Roundup / Weed Spray | last done: April 17, 2026 | by: Cheese and Uncle Mike | cadence: 30 days | active months: March through June
+   - Golf Cart Batteries (distilled water) | last done: April 17, 2026 | by: Cheese | cadence: 120 days
+   - Put Boat In Water | last done: April 2026 | by: Cheese | cadence: Annual | surfaces: March 1 each year | goes quiet after May
+   - Pull Boat / Winterize | cadence: Annual | surfaces: September 15 each year | goes quiet after November | not yet done this cycle
+
+4. ACTIVITY LOG -- insert these historical entries in chronological order, oldest first. These should appear in the log feed but should NOT trigger any email notifications:
+   - February 14, 2026 | Kevin Kinney | Sprayed for bugs
+   - April 17, 2026 | Cheese | Weed whacked the property
+   - April 17, 2026 | Cheese and Uncle Mike | Applied Roundup and weed spray
+   - April 17, 2026 | Cheese | Added distilled water to golf cart batteries
+
+5. APP DISPLAY
+   - The app header should read "Kinney Lake House" with "Margie's Barge Report" as the subtitle. Margie was the family matriarch and the lake house nickname is Margie's Barge -- keep this warm and personal throughout the app.
+
+6. Do not insert any fake or placeholder data. Only insert what is listed above. Do not generate any emails or notifications as part of this data import.
