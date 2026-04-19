@@ -28,8 +28,10 @@ function card(icon: string, title: string, body: string): string {
 export function mondaySummaryHtml(opts: {
   lakeElevation: number;
   lakeStatus: string;
-  clearanceUp: number | null;
-  clearanceDown: number | null;
+  toUpperDock: number | null;
+  toLowerDock: number | null;
+  upperDockLimit: number | null;
+  lowerDockLimit: number | null;
   lakePulledAt: string;
   weatherDays: Array<{ name: string; shortForecast: string; rainProbability: number; highTemp: number }>;
   overdueTasks: Array<{ icon: string; name: string; nextDueDate: string | null; daysOverdue?: number; lastDoneBy?: string | null; lastDoneDate?: string | null }>;
@@ -41,7 +43,7 @@ export function mondaySummaryHtml(opts: {
   appUrl: string;
 }): string {
   const {
-    lakeElevation, lakeStatus, clearanceUp, clearanceDown, lakePulledAt,
+    lakeElevation, lakeStatus, toUpperDock, toLowerDock, upperDockLimit, lowerDockLimit, lakePulledAt,
     weatherDays, overdueTasks, dueSoonTasks, upcomingTasks,
     bringItems, openIssues, recentActivity, appUrl,
   } = opts;
@@ -79,8 +81,9 @@ export function mondaySummaryHtml(opts: {
       <div>
         <div style="${BODY_TEXT}margin:0;">${si.description}</div>
         <div style="${MUTED}margin-top:6px;">
-          ${clearanceDown != null ? `${clearanceDown.toFixed(2)}' above safe low` : ""}
-          ${clearanceUp != null ? `&nbsp;·&nbsp;${clearanceUp.toFixed(2)}' below safe high` : ""}
+          ${toUpperDock != null ? `${toUpperDock.toFixed(2)}' to upper dock limit${upperDockLimit != null ? ` (${upperDockLimit.toFixed(2)}')` : ""}` : ""}
+          ${toLowerDock != null ? `&nbsp;·&nbsp;${toLowerDock.toFixed(2)}' to lower dock limit${lowerDockLimit != null ? ` (${lowerDockLimit.toFixed(2)}')` : ""}` : ""}
+          ${toUpperDock == null && toLowerDock == null ? `Log a dock adjustment to see clearance to your dock limits.` : ""}
         </div>
       </div>
     </div>`);

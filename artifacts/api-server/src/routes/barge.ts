@@ -624,7 +624,7 @@ export async function buildMondayEmailHtml(): Promise<{ html: string; subject: s
   const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
   const settings = settingsResponse(settingsRow);
 
-  const [lakeLevel, weather, tasks, issues, bringRows, activityRows] = await Promise.all([
+  const [lakeLevel, weather, tasks, issues, bringRows, activityRows, lastDockAdj] = await Promise.all([
     fetchLake(settings),
     fetchWeather(),
     db.select().from(tasksTable).orderBy(tasksTable.id),
@@ -633,7 +633,18 @@ export async function buildMondayEmailHtml(): Promise<{ html: string; subject: s
     db.select().from(activityEntriesTable)
       .where(gte(activityEntriesTable.actionDate, addDays(todayStr, -7)))
       .orderBy(desc(activityEntriesTable.createdAt)).limit(20),
+    db.select().from(dockAdjustmentsTable).orderBy(desc(dockAdjustmentsTable.workDate), desc(dockAdjustmentsTable.createdAt)).limit(1),
   ]);
+
+  // Compute clearance to dock limits (matches Dock tab math)
+  const adj = lastDockAdj[0];
+  const loggedElev = adj?.lakeElevation == null ? null : Number(adj.lakeElevation);
+  const loggedUp = adj?.clearanceUp == null ? null : Number(adj.clearanceUp);
+  const loggedDown = adj?.clearanceDown == null ? null : Number(adj.clearanceDown);
+  const upperDockLimit = loggedElev != null && loggedUp != null ? loggedElev + loggedUp : null;
+  const lowerDockLimit = loggedElev != null && loggedDown != null ? loggedElev - loggedDown : null;
+  const toUpperDock = upperDockLimit != null ? Number((upperDockLimit - lakeLevel.elevation).toFixed(2)) : null;
+  const toLowerDock = lowerDockLimit != null ? Number((lakeLevel.elevation - lowerDockLimit).toFixed(2)) : null;
 
   const overdueTasks = tasks.filter(t => taskStatus(t) === "overdue")
     .map(t => {
@@ -656,14 +667,16 @@ export async function buildMondayEmailHtml(): Promise<{ html: string; subject: s
     return next > in14 && next <= in30 && taskStatus(t) !== "seasonal";
   }).map(t => ({ icon: t.icon, name: t.name, nextDueDate: addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) }));
 
-  const appUrl = process.env.APP_URL ?? "https://margiebargereport.replit.app";
+  const appUrl = process.env.APP_URL ?? "https://margies-barge.replit.app";
   const subject = `Margie's Barge Report -- ${today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
 
   const html = mondaySummaryHtml({
     lakeElevation: lakeLevel.elevation,
     lakeStatus: lakeLevel.status,
-    clearanceUp: lakeLevel.clearanceUp,
-    clearanceDown: lakeLevel.clearanceDown,
+    toUpperDock,
+    toLowerDock,
+    upperDockLimit,
+    lowerDockLimit,
     lakePulledAt: lakeLevel.pulledAt,
     weatherDays: weather,
     overdueTasks,
