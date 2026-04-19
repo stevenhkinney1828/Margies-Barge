@@ -121,6 +121,8 @@ export interface Task {
   /** @nullable */
   activeMonths: string | null;
   /** @nullable */
+  activeMonthNums: number[] | null;
+  /** @nullable */
   lastDoneDate: string | null;
   /** @nullable */
   lastDoneBy: string | null;
@@ -135,8 +137,22 @@ export interface TaskCreate {
   icon: string;
   name: string;
   cadenceDays: number;
+  activeMonthNums?: number[];
   /** @nullable */
-  activeMonths?: string | null;
+  notes?: string | null;
+}
+
+export interface TaskUpdate {
+  icon?: string;
+  name?: string;
+  cadenceDays?: number;
+  activeMonthNums?: number[];
+  /** @nullable */
+  lastDoneDate?: string | null;
+  /** @nullable */
+  lastDoneBy?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface CompletionCreate {

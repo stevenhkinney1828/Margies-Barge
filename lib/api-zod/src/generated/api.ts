@@ -96,6 +96,7 @@ export const ListTasksResponseItem = zod.object({
   cadenceDays: zod.number(),
   cadenceLabel: zod.string(),
   activeMonths: zod.string().nullable(),
+  activeMonthNums: zod.array(zod.number()).nullable(),
   lastDoneDate: zod.string().nullable(),
   lastDoneBy: zod.string().nullable(),
   nextDueDate: zod.string().nullable(),
@@ -111,7 +112,47 @@ export const CreateTaskBody = zod.object({
   icon: zod.string(),
   name: zod.string(),
   cadenceDays: zod.number(),
-  activeMonths: zod.string().nullish(),
+  activeMonthNums: zod.array(zod.number()).optional(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Edit a task
+ */
+export const UpdateTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTaskBody = zod.object({
+  icon: zod.string().optional(),
+  name: zod.string().optional(),
+  cadenceDays: zod.number().optional(),
+  activeMonthNums: zod.array(zod.number()).optional(),
+  lastDoneDate: zod.string().nullish(),
+  lastDoneBy: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
+export const UpdateTaskResponse = zod.object({
+  id: zod.number(),
+  icon: zod.string(),
+  name: zod.string(),
+  cadenceDays: zod.number(),
+  cadenceLabel: zod.string(),
+  activeMonths: zod.string().nullable(),
+  activeMonthNums: zod.array(zod.number()).nullable(),
+  lastDoneDate: zod.string().nullable(),
+  lastDoneBy: zod.string().nullable(),
+  nextDueDate: zod.string().nullable(),
+  status: zod.enum(["good", "due-soon", "overdue", "seasonal"]),
+  notes: zod.string().nullable(),
+});
+
+/**
+ * @summary Delete a task permanently
+ */
+export const DeleteTaskParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -133,6 +174,7 @@ export const CompleteTaskResponse = zod.object({
   cadenceDays: zod.number(),
   cadenceLabel: zod.string(),
   activeMonths: zod.string().nullable(),
+  activeMonthNums: zod.array(zod.number()).nullable(),
   lastDoneDate: zod.string().nullable(),
   lastDoneBy: zod.string().nullable(),
   nextDueDate: zod.string().nullable(),

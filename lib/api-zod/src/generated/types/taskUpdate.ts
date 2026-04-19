@@ -6,11 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface TaskCreate {
-  icon: string;
-  name: string;
-  cadenceDays: number;
+export interface TaskUpdate {
+  icon?: string;
+  name?: string;
+  cadenceDays?: number;
   activeMonthNums?: number[];
+  /** @nullable */
+  lastDoneDate?: string | null;
+  /** @nullable */
+  lastDoneBy?: string | null;
   /** @nullable */
   notes?: string | null;
 }

@@ -24,6 +24,7 @@ import {
   DeleteBookingParams,
   DeleteBringItemBody,
   DeleteBringItemParams,
+  DeleteTaskParams,
   GetDashboardResponse,
   GetSettingsResponse,
   ListActivityResponse,
@@ -37,6 +38,9 @@ import {
   ResolveIssueResponse,
   UpdateSettingsBody,
   UpdateSettingsResponse,
+  UpdateTaskBody,
+  UpdateTaskParams,
+  UpdateTaskResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -94,28 +98,56 @@ function isActiveMonth(start: number | null, end: number | null, now = new Date(
   return month >= start || month <= end;
 }
 
+function computeCadenceLabel(days: number): string {
+  if (days === 7) return "Weekly";
+  if (days === 14) return "Every 2 weeks";
+  if (days === 30) return "Monthly";
+  if (days === 60) return "Every 2 months";
+  if (days === 90) return "Every 3 months";
+  if (days === 120) return "Every 4 months";
+  if (days === 180) return "Every 6 months";
+  if (days === 365) return "Annually";
+  return `Every ${days} days`;
+}
+
+function isInActiveMonths(task: typeof tasksTable.$inferSelect, now = new Date()): boolean {
+  const nums = task.activeMonthNums;
+  if (nums && nums.length > 0) {
+    return nums.includes(now.getMonth() + 1);
+  }
+  return isActiveMonth(task.activeStartMonth, task.activeEndMonth, now);
+}
+
 function taskStatus(task: typeof tasksTable.$inferSelect): "good" | "due-soon" | "overdue" | "seasonal" {
-  if (!isActiveMonth(task.activeStartMonth, task.activeEndMonth)) return "seasonal";
   const lastDone = dateOnly(task.lastDoneDate);
+  // Never done — always overdue regardless of season
   if (!lastDone) return "overdue";
+
   const next = new Date(`${addDays(lastDone, task.cadenceDays)}T00:00:00.000Z`);
   const today = new Date();
   const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   const daysUntil = Math.ceil((next.getTime() - todayUtc) / 86_400_000);
+
+  // Past due — always overdue regardless of season; nothing falls through the cracks
   if (daysUntil < 0) return "overdue";
+
+  // Not yet due — now check season. Seasonal only applies to tasks that still have time left.
+  if (!isInActiveMonths(task)) return "seasonal";
   if (daysUntil <= 14) return "due-soon";
   return "good";
 }
 
 function taskResponse(task: typeof tasksTable.$inferSelect) {
   const lastDoneDate = dateOnly(task.lastDoneDate);
+  const activeMonthNums = task.activeMonthNums ?? null;
   return {
     id: task.id,
     icon: task.icon,
     name: task.name,
     cadenceDays: task.cadenceDays,
-    cadenceLabel: task.cadenceLabel,
+    cadenceLabel: computeCadenceLabel(task.cadenceDays),
     activeMonths: task.activeMonths,
+    activeMonthNums,
     lastDoneDate,
     lastDoneBy: task.lastDoneBy,
     nextDueDate: lastDoneDate ? addDays(lastDoneDate, task.cadenceDays) : null,
@@ -306,18 +338,60 @@ router.post("/tasks", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const active = parseActiveMonths(parsed.data.activeMonths);
+  const monthNums = parsed.data.activeMonthNums && parsed.data.activeMonthNums.length > 0 ? parsed.data.activeMonthNums : null;
   const [task] = await db.insert(tasksTable).values({
     icon: parsed.data.icon,
     name: parsed.data.name,
     cadenceDays: parsed.data.cadenceDays,
-    cadenceLabel: `Every ${parsed.data.cadenceDays} days`,
-    activeMonths: parsed.data.activeMonths ?? null,
-    activeStartMonth: active.start,
-    activeEndMonth: active.end,
+    cadenceLabel: computeCadenceLabel(parsed.data.cadenceDays),
+    activeMonths: null,
+    activeStartMonth: null,
+    activeEndMonth: null,
+    activeMonthNums: monthNums,
+    notes: parsed.data.notes ?? null,
   }).returning();
-  await db.insert(activityEntriesTable).values({ personName: "Family", action: `added task ${task.name}`, actionDate: new Date().toISOString().slice(0, 10) });
+  await db.insert(activityEntriesTable).values({ personName: "Family", action: `added task "${task.name}"`, actionDate: new Date().toISOString().slice(0, 10) });
   res.status(201).json(CompleteTaskResponse.parse(taskResponse(task)));
+});
+
+router.patch("/tasks/:id", async (req, res): Promise<void> => {
+  await ensureBootstrap();
+  const params = UpdateTaskParams.safeParse(req.params);
+  const body = UpdateTaskBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: params.success ? (body.error?.message ?? "Invalid body") : params.error.message });
+    return;
+  }
+  const existing = await db.select().from(tasksTable).where(eq(tasksTable.id, params.data.id)).limit(1);
+  if (!existing[0]) { res.status(404).json({ error: "Task not found" }); return; }
+
+  const monthNums = body.data.activeMonthNums != null
+    ? (body.data.activeMonthNums.length === 0 ? null : body.data.activeMonthNums)
+    : existing[0].activeMonthNums;
+
+  const cadenceDays = body.data.cadenceDays ?? existing[0].cadenceDays;
+  const [task] = await db.update(tasksTable).set({
+    icon: body.data.icon ?? existing[0].icon,
+    name: body.data.name ?? existing[0].name,
+    cadenceDays,
+    cadenceLabel: computeCadenceLabel(cadenceDays),
+    activeMonthNums: monthNums,
+    lastDoneDate: body.data.lastDoneDate !== undefined ? body.data.lastDoneDate : existing[0].lastDoneDate,
+    lastDoneBy: body.data.lastDoneBy !== undefined ? body.data.lastDoneBy : existing[0].lastDoneBy,
+    notes: body.data.notes !== undefined ? body.data.notes : existing[0].notes,
+  }).where(eq(tasksTable.id, params.data.id)).returning();
+  await db.insert(activityEntriesTable).values({ personName: "Family", action: `updated task "${task.name}"`, actionDate: new Date().toISOString().slice(0, 10) });
+  res.json(UpdateTaskResponse.parse(taskResponse(task)));
+});
+
+router.delete("/tasks/:id", async (req, res): Promise<void> => {
+  await ensureBootstrap();
+  const params = DeleteTaskParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [task] = await db.delete(tasksTable).where(eq(tasksTable.id, params.data.id)).returning();
+  if (!task) { res.status(404).json({ error: "Task not found" }); return; }
+  await db.insert(activityEntriesTable).values({ personName: "Family", action: `deleted task "${task.name}"`, actionDate: new Date().toISOString().slice(0, 10) });
+  res.sendStatus(204);
 });
 
 router.post("/tasks/:id/complete", async (req, res): Promise<void> => {
@@ -325,7 +399,7 @@ router.post("/tasks/:id/complete", async (req, res): Promise<void> => {
   const params = CompleteTaskParams.safeParse(req.params);
   const body = CompleteTaskBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    res.status(400).json({ error: params.success ? body.error.message : params.error.message });
+    res.status(400).json({ error: params.success ? body.error?.message ?? "Invalid body" : params.error.message });
     return;
   }
   const [task] = await db.update(tasksTable).set({ lastDoneDate: body.data.workDate, lastDoneBy: body.data.personName }).where(eq(tasksTable.id, params.data.id)).returning();
@@ -341,7 +415,7 @@ router.post("/dock-adjustments", async (req, res): Promise<void> => {
   await ensureBootstrap();
   const body = CreateDockAdjustmentBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    res.status(400).json({ error: body.error?.message ?? "Invalid body" });
     return;
   }
   const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
@@ -377,7 +451,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   await ensureBootstrap();
   const body = CreateBookingBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    res.status(400).json({ error: body.error?.message ?? "Invalid body" });
     return;
   }
   if (!body.data.spokeWithUncles || !body.data.spokeWithCousins) {
@@ -425,7 +499,7 @@ router.post("/bring-items", async (req, res): Promise<void> => {
   await ensureBootstrap();
   const body = CreateBringItemBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    res.status(400).json({ error: body.error?.message ?? "Invalid body" });
     return;
   }
   const [item] = await db.insert(bringItemsTable).values(body.data).returning();
@@ -438,7 +512,7 @@ router.delete("/bring-items/:id", async (req, res): Promise<void> => {
   const params = DeleteBringItemParams.safeParse(req.params);
   const body = DeleteBringItemBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    res.status(400).json({ error: params.success ? body.error.message : params.error.message });
+    res.status(400).json({ error: params.success ? body.error?.message ?? "Invalid body" : params.error.message });
     return;
   }
   const [item] = await db.delete(bringItemsTable).where(eq(bringItemsTable.id, params.data.id)).returning();
@@ -465,7 +539,7 @@ router.post("/issues", async (req, res): Promise<void> => {
   await ensureBootstrap();
   const body = CreateIssueBody.safeParse(req.body);
   if (!body.success) {
-    res.status(400).json({ error: body.error.message });
+    res.status(400).json({ error: body.error?.message ?? "Invalid body" });
     return;
   }
   const [issue] = await db.insert(issuesTable).values({ ...body.data, status: "open" }).returning();
@@ -489,7 +563,7 @@ router.post("/issues/:id/resolve", async (req, res): Promise<void> => {
   const params = ResolveIssueParams.safeParse(req.params);
   const body = ResolveIssueBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    res.status(400).json({ error: params.success ? body.error.message : params.error.message });
+    res.status(400).json({ error: params.success ? body.error?.message ?? "Invalid body" : params.error.message });
     return;
   }
   const [issue] = await db.update(issuesTable).set({ status: "resolved", resolvedBy: body.data.personName, resolutionNote: body.data.resolutionNote, resolvedAt: new Date() }).where(and(eq(issuesTable.id, params.data.id), eq(issuesTable.status, "open"))).returning();

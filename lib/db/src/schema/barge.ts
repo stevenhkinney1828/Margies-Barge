@@ -29,6 +29,7 @@ export const tasksTable = pgTable("barge_tasks", {
   activeMonths: text("active_months"),
   activeStartMonth: integer("active_start_month"),
   activeEndMonth: integer("active_end_month"),
+  activeMonthNums: integer("active_month_nums").array(),
   lastDoneDate: date("last_done_date"),
   lastDoneBy: text("last_done_by"),
   notes: text("notes"),

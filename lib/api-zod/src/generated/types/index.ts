@@ -31,4 +31,5 @@ export * from "./settingsUpdate";
 export * from "./task";
 export * from "./taskCreate";
 export * from "./taskStatus";
+export * from "./taskUpdate";
 export * from "./weatherDay";

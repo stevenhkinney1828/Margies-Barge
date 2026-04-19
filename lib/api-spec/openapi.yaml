@@ -94,6 +94,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Task"
+  /tasks/{id}:
+    patch:
+      operationId: updateTask
+      tags: [barge]
+      summary: Edit a task
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+    delete:
+      operationId: deleteTask
+      tags: [barge]
+      summary: Delete a task permanently
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
   /tasks/{id}/complete:
     post:
       operationId: completeTask
@@ -455,6 +484,10 @@ components:
           type: string
         activeMonths:
           type: [string, 'null']
+        activeMonthNums:
+          type: [array, 'null']
+          items:
+            type: integer
         lastDoneDate:
           type: [string, 'null']
         lastDoneBy:
@@ -466,7 +499,7 @@ components:
           enum: [good, due-soon, overdue, seasonal]
         notes:
           type: [string, 'null']
-      required: [id, icon, name, cadenceDays, cadenceLabel, activeMonths, lastDoneDate, lastDoneBy, nextDueDate, status, notes]
+      required: [id, icon, name, cadenceDays, cadenceLabel, activeMonths, activeMonthNums, lastDoneDate, lastDoneBy, nextDueDate, status, notes]
     TaskCreate:
       type: object
       properties:
@@ -476,9 +509,32 @@ components:
           type: string
         cadenceDays:
           type: integer
-        activeMonths:
+        activeMonthNums:
+          type: array
+          items:
+            type: integer
+        notes:
           type: [string, 'null']
       required: [icon, name, cadenceDays]
+    TaskUpdate:
+      type: object
+      properties:
+        icon:
+          type: string
+        name:
+          type: string
+        cadenceDays:
+          type: integer
+        activeMonthNums:
+          type: array
+          items:
+            type: integer
+        lastDoneDate:
+          type: [string, 'null']
+        lastDoneBy:
+          type: [string, 'null']
+        notes:
+          type: [string, 'null']
     CompletionCreate:
       type: object
       properties:

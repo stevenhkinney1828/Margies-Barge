@@ -16,6 +16,8 @@ export interface Task {
   /** @nullable */
   activeMonths: string | null;
   /** @nullable */
+  activeMonthNums: number[] | null;
+  /** @nullable */
   lastDoneDate: string | null;
   /** @nullable */
   lastDoneBy: string | null;
