@@ -1,4 +1,4 @@
-import { getUncachableResendClient } from "./resend.js";
+import nodemailer from "nodemailer";
 
 export async function sendEmail(opts: {
   to: string[];
@@ -7,10 +7,19 @@ export async function sendEmail(opts: {
 }): Promise<{ sent: boolean; error?: string }> {
   if (opts.to.length === 0) return { sent: false, error: "No recipients" };
   try {
-    const { client, fromEmail } = await getUncachableResendClient();
-    const from = fromEmail ?? "Margie's Barge Report <noreply@resend.dev>";
-    const { error } = await client.emails.send({ from, to: opts.to, subject: opts.subject, html: opts.html });
-    if (error) return { sent: false, error: error.message };
+    const user = process.env.GMAIL_USER;
+    const pass = process.env.GMAIL_APP_PASSWORD;
+    if (!user || !pass) throw new Error("Gmail credentials not configured (GMAIL_USER / GMAIL_APP_PASSWORD)");
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user, pass },
+    });
+    await transporter.sendMail({
+      from: `"Margie's Barge Report" <${user}>`,
+      to: opts.to.join(", "),
+      subject: opts.subject,
+      html: opts.html,
+    });
     return { sent: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

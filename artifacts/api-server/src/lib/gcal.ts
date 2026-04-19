@@ -63,6 +63,36 @@ export async function createCalendarEvent(params: {
   return json.id;
 }
 
+export async function updateCalendarEvent(eventId: string, params: {
+  personName: string;
+  startDate: string;
+  endDate: string;
+}): Promise<void> {
+  const token = await getAccessToken();
+  const endDateExclusive = addOneDay(params.endDate);
+  const body = {
+    summary: params.personName,
+    description: `Lake house stay — booked via Margie's Barge Report`,
+    start: { date: params.startDate },
+    end:   { date: endDateExclusive },
+  };
+  const res = await fetch(
+    `${CALENDAR_BASE}/${calendarId()}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    const text = await res.text();
+    throw new Error(`Failed to update Google Calendar event: ${text}`);
+  }
+}
+
 export async function deleteCalendarEvent(eventId: string): Promise<void> {
   const token = await getAccessToken();
   const res = await fetch(

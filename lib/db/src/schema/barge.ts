@@ -85,6 +85,17 @@ export const activityEntriesTable = pgTable("barge_activity_entries", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const familyMembersTable = pgTable("barge_family_members", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  appAccess: boolean("app_access").notNull().default(false),
+  notifications: boolean("notifications").notNull().default(false),
+  mondayEmail: boolean("monday_email").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
 export const insertTaskSchema = createInsertSchema(tasksTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertBookingSchema = createInsertSchema(bookingsTable).omit({ id: true, createdAt: true });
 export const insertBringItemSchema = createInsertSchema(bringItemsTable).omit({ id: true, createdAt: true });

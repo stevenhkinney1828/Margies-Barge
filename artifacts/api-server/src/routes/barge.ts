@@ -1,14 +1,16 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { z } from "zod";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { sendEmail } from "../lib/sendEmail.js";
-import { urgentIssueHtml, bookingRemovedHtml, mondaySummaryHtml } from "../lib/emails.js";
-import { createCalendarEvent, deleteCalendarEvent } from "../lib/gcal.js";
+import { urgentIssueHtml, urgentIssueResolvedHtml, bookingRemovedHtml, mondaySummaryHtml } from "../lib/emails.js";
+import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from "../lib/gcal.js";
 import {
   activityEntriesTable,
   bookingsTable,
   bringItemsTable,
   db,
   dockAdjustmentsTable,
+  familyMembersTable,
   issuesTable,
   settingsTable,
   tasksTable,
@@ -492,14 +494,15 @@ router.delete("/bookings/:id", async (req, res): Promise<void> => {
     deleteCalendarEvent(existing.googleEventId).catch((err) => console.error("Google Calendar delete failed:", err));
   }
 
-  // Send removal email
-  const [settingsRowForBooking] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
-  const bookingEmails = settingsRowForBooking?.familyEmails ?? [];
-  if (bookingEmails.length > 0) {
+  // Send removal email to family members with notifications enabled
+  const notifMembers = await db.select().from(familyMembersTable)
+    .where(and(eq(familyMembersTable.notifications, true)));
+  const notifEmails = notifMembers.map(m => m.email).filter(Boolean) as string[];
+  if (notifEmails.length > 0) {
     sendEmail({
-      to: bookingEmails,
-      subject: `📅 Lake House Booking Removed by ${booking.personName}`,
-      html: bookingRemovedHtml({ personName: booking.personName, startDate: dateOnly(booking.startDate) ?? "", endDate: dateOnly(booking.endDate) ?? "", removedAt }),
+      to: notifEmails,
+      subject: `📅 Dates back open at the lake house`,
+      html: bookingRemovedHtml({ personName: booking.personName, startDate: dateOnly(booking.startDate) ?? "", endDate: dateOnly(booking.endDate) ?? "" }),
     }).catch(() => void 0);
   }
   res.sendStatus(204);
@@ -561,11 +564,12 @@ router.post("/issues", async (req, res): Promise<void> => {
   const [issue] = await db.insert(issuesTable).values({ ...body.data, status: "open" }).returning();
   await db.insert(activityEntriesTable).values({ personName: body.data.personName, action: `${body.data.urgent ? "flagged urgent issue" : "posted issue"}: ${body.data.caption}`, actionDate: new Date().toISOString().slice(0, 10) });
   if (body.data.urgent) {
-    const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
-    const emails = settingsRow?.familyEmails ?? [];
-    if (emails.length > 0) {
+    const urgentMembers = await db.select().from(familyMembersTable)
+      .where(and(eq(familyMembersTable.notifications, true)));
+    const urgentEmails = urgentMembers.map(m => m.email).filter(Boolean) as string[];
+    if (urgentEmails.length > 0) {
       sendEmail({
-        to: emails,
+        to: urgentEmails,
         subject: `🚨 Urgent Issue at the Lake House: ${body.data.caption}`,
         html: urgentIssueHtml({ reportedBy: body.data.personName, caption: body.data.caption, photoUrl: body.data.photoUrl }),
       }).catch(() => void 0);
@@ -588,6 +592,19 @@ router.post("/issues/:id/resolve", async (req, res): Promise<void> => {
     return;
   }
   await db.insert(activityEntriesTable).values({ personName: body.data.personName, action: `resolved issue: ${body.data.resolutionNote}`, actionDate: new Date().toISOString().slice(0, 10) });
+  // Send resolution email to family members with notifications enabled
+  if (issue.urgent) {
+    const resolveMembers = await db.select().from(familyMembersTable)
+      .where(and(eq(familyMembersTable.notifications, true)));
+    const resolveEmails = resolveMembers.map(m => m.email).filter(Boolean) as string[];
+    if (resolveEmails.length > 0) {
+      sendEmail({
+        to: resolveEmails,
+        subject: `✅ Urgent issue resolved at the lake house`,
+        html: urgentIssueResolvedHtml({ resolvedBy: body.data.personName, resolutionNote: body.data.resolutionNote }),
+      }).catch(() => void 0);
+    }
+  }
   res.json(ResolveIssueResponse.parse({ ...issue, resolvedAt: iso(issue.resolvedAt), createdAt: iso(issue.createdAt) }));
 });
 
@@ -597,35 +614,213 @@ router.get("/activity", async (_req, res): Promise<void> => {
   res.json(ListActivityResponse.parse(entries.map((entry) => ({ ...entry, actionDate: dateOnly(entry.actionDate), createdAt: iso(entry.createdAt) }))));
 });
 
-router.post("/email/monday-summary", async (_req, res): Promise<void> => {
-  await ensureBootstrap();
+async function buildMondayEmailHtml(): Promise<{ html: string; subject: string }> {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const in14 = addDays(todayStr, 14);
+  const in30 = addDays(todayStr, 30);
+  const in60 = addDays(todayStr, 60);
+
   const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
   const settings = settingsResponse(settingsRow);
-  const emails = settings.familyEmails;
-  if (emails.length === 0) {
-    res.status(400).json({ sent: false, error: "No family emails configured in Settings." });
-    return;
-  }
-  const [lakeLevel, tasks, issues, bookings] = await Promise.all([
+
+  const [lakeLevel, weather, tasks, issues, bringRows, activityRows, allBookings] = await Promise.all([
     fetchLake(settings),
+    fetchWeather(),
     db.select().from(tasksTable).orderBy(tasksTable.id),
     db.select().from(issuesTable).where(eq(issuesTable.status, "open")),
-    db.select().from(bookingsTable).where(gte(bookingsTable.startDate, new Date().toISOString().slice(0, 10))).orderBy(bookingsTable.startDate).limit(10),
+    db.select().from(bringItemsTable).orderBy(desc(bringItemsTable.createdAt)),
+    db.select().from(activityEntriesTable)
+      .where(gte(activityEntriesTable.actionDate, addDays(todayStr, -7)))
+      .orderBy(desc(activityEntriesTable.createdAt)).limit(20),
+    db.select().from(bookingsTable)
+      .where(and(gte(bookingsTable.startDate, todayStr), lte(bookingsTable.startDate, in60)))
+      .orderBy(bookingsTable.startDate),
   ]);
-  const overdueTasks = tasks.filter((t) => taskStatus(t) === "overdue").map((t) => ({ icon: t.icon, name: t.name }));
-  const dueSoonTasks = tasks.filter((t) => taskStatus(t) === "due-soon").map((t) => ({ icon: t.icon, name: t.name }));
-  const urgentIssues = issues.filter((i) => i.urgent).length;
-  const upcomingBookings = bookings.map((b) => ({ personName: b.personName, startDate: dateOnly(b.startDate) ?? "", endDate: dateOnly(b.endDate) ?? "" }));
-  const result = await sendEmail({
-    to: emails,
-    subject: `⚓ Kinney Lake House — Monday Morning Report`,
-    html: mondaySummaryHtml({ lakeElevation: lakeLevel.elevation, lakeStatus: lakeLevel.status, overdueTasks, dueSoonTasks, openIssues: issues.length, urgentIssues, upcomingBookings }),
+
+  const overdueTasks = tasks.filter(t => taskStatus(t) === "overdue")
+    .map(t => ({ icon: t.icon, name: t.name, nextDueDate: t.lastDoneDate ? addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) : null }));
+  const dueSoonTasks = tasks.filter(t => taskStatus(t) === "due-soon")
+    .map(t => ({ icon: t.icon, name: t.name, nextDueDate: t.lastDoneDate ? addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) : null }));
+  const upcomingTasks = tasks.filter(t => {
+    const last = dateOnly(t.lastDoneDate);
+    if (!last) return false;
+    const next = addDays(last, t.cadenceDays);
+    return next > in14 && next <= in30 && taskStatus(t) !== "seasonal";
+  }).map(t => ({ icon: t.icon, name: t.name, nextDueDate: addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) }));
+
+  // Find open 3-day+ slots between today and +60 days
+  const bookedRanges = allBookings.map(b => ({
+    start: dateOnly(b.startDate)!,
+    end: dateOnly(b.endDate)!,
+  }));
+  const openSlots: Array<{ start: string; end: string }> = [];
+  let cursor = todayStr;
+  for (const range of bookedRanges) {
+    if (cursor < range.start) {
+      const daysGap = (new Date(range.start).getTime() - new Date(cursor).getTime()) / 86400000;
+      if (daysGap >= 3) openSlots.push({ start: cursor, end: addDays(range.start, -1) });
+    }
+    cursor = addDays(range.end, 1);
+  }
+  if (cursor < in60) {
+    const daysLeft = (new Date(in60).getTime() - new Date(cursor).getTime()) / 86400000;
+    if (daysLeft >= 3) openSlots.push({ start: cursor, end: in60 });
+  }
+
+  const appUrl = process.env.APP_URL ?? "https://margiebargereport.replit.app";
+  const subject = `⚓ Margie's Barge Report — ${today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
+
+  const html = mondaySummaryHtml({
+    lakeElevation: lakeLevel.elevation,
+    lakeStatus: lakeLevel.status,
+    clearanceUp: lakeLevel.clearanceUp,
+    clearanceDown: lakeLevel.clearanceDown,
+    lakePulledAt: lakeLevel.pulledAt,
+    weatherDays: weather,
+    overdueTasks,
+    dueSoonTasks,
+    upcomingTasks,
+    bringItems: bringRows.map(b => ({ description: b.description, personName: b.personName })),
+    openIssues: issues.map(i => ({ caption: i.caption, personName: i.personName, urgent: i.urgent })),
+    recentActivity: activityRows.map(a => ({ personName: a.personName, action: a.action, actionDate: dateOnly(a.actionDate)! })),
+    openSlots,
+    appUrl,
   });
+  return { html, subject };
+}
+
+router.post("/email/monday-summary", async (_req, res): Promise<void> => {
+  await ensureBootstrap();
+  const mondayMembers = await db.select().from(familyMembersTable)
+    .where(and(eq(familyMembersTable.mondayEmail, true)));
+  const emails = mondayMembers.map(m => m.email).filter(Boolean) as string[];
+  if (emails.length === 0) {
+    res.status(400).json({ sent: false, error: "No family members have Monday Email enabled." });
+    return;
+  }
+  const { html, subject } = await buildMondayEmailHtml();
+  const result = await sendEmail({ to: emails, subject, html });
   if (result.sent) {
     res.json({ sent: true, recipients: emails.length });
   } else {
     res.status(500).json({ sent: false, error: result.error });
   }
+});
+
+router.post("/email/test", async (_req, res): Promise<void> => {
+  await ensureBootstrap();
+  const testEmail = process.env.GMAIL_USER;
+  if (!testEmail) {
+    res.status(400).json({ sent: false, error: "GMAIL_USER not configured" });
+    return;
+  }
+  const { html, subject } = await buildMondayEmailHtml();
+  const result = await sendEmail({ to: [testEmail], subject: `[TEST] ${subject}`, html });
+  if (result.sent) {
+    res.json({ sent: true, recipients: 1, to: testEmail });
+  } else {
+    res.status(500).json({ sent: false, error: result.error });
+  }
+});
+
+// ── Family Members ────────────────────────────────────────────────────────────
+
+const FamilyMemberBody = z.object({
+  name: z.string().min(1),
+  email: z.string().email().optional().nullable(),
+  appAccess: z.boolean().optional().default(false),
+  notifications: z.boolean().optional().default(false),
+  mondayEmail: z.boolean().optional().default(false),
+});
+const FamilyMemberParams = z.object({ id: z.coerce.number().int().positive() });
+
+function familyMemberResponse(m: typeof familyMembersTable.$inferSelect) {
+  return {
+    id: m.id,
+    name: m.name,
+    email: m.email ?? null,
+    appAccess: m.appAccess,
+    notifications: m.notifications,
+    mondayEmail: m.mondayEmail,
+    createdAt: iso(m.createdAt),
+  };
+}
+
+router.get("/family-members", async (_req, res): Promise<void> => {
+  await ensureBootstrap();
+  const members = await db.select().from(familyMembersTable).orderBy(familyMembersTable.id);
+  res.json(members.map(familyMemberResponse));
+});
+
+router.post("/family-members", async (req, res): Promise<void> => {
+  await ensureBootstrap();
+  const parsed = FamilyMemberBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [member] = await db.insert(familyMembersTable).values({
+    name: parsed.data.name,
+    email: parsed.data.email ?? null,
+    appAccess: parsed.data.appAccess ?? false,
+    notifications: parsed.data.notifications ?? false,
+    mondayEmail: parsed.data.mondayEmail ?? false,
+  }).returning();
+  res.status(201).json(familyMemberResponse(member));
+});
+
+router.patch("/family-members/:id", async (req, res): Promise<void> => {
+  await ensureBootstrap();
+  const params = FamilyMemberParams.safeParse(req.params);
+  const parsed = FamilyMemberBody.partial().safeParse(req.body);
+  if (!params.success || !parsed.success) { res.status(400).json({ error: "Invalid request" }); return; }
+  const existing = await db.select().from(familyMembersTable).where(eq(familyMembersTable.id, params.data.id)).limit(1);
+  if (!existing[0]) { res.status(404).json({ error: "Member not found" }); return; }
+  const [updated] = await db.update(familyMembersTable).set({
+    name: parsed.data.name ?? existing[0].name,
+    email: parsed.data.email !== undefined ? (parsed.data.email ?? null) : existing[0].email,
+    appAccess: parsed.data.appAccess ?? existing[0].appAccess,
+    notifications: parsed.data.notifications ?? existing[0].notifications,
+    mondayEmail: parsed.data.mondayEmail ?? existing[0].mondayEmail,
+  }).where(eq(familyMembersTable.id, params.data.id)).returning();
+  res.json(familyMemberResponse(updated));
+});
+
+router.delete("/family-members/:id", async (req, res): Promise<void> => {
+  await ensureBootstrap();
+  const params = FamilyMemberParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [deleted] = await db.delete(familyMembersTable).where(eq(familyMembersTable.id, params.data.id)).returning();
+  if (!deleted) { res.status(404).json({ error: "Member not found" }); return; }
+  res.sendStatus(204);
+});
+
+// ── Edit Booking ─────────────────────────────────────────────────────────────
+
+const UpdateBookingBody = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+const UpdateBookingParams = z.object({ id: z.coerce.number().int().positive() });
+
+router.patch("/bookings/:id", async (req, res): Promise<void> => {
+  await ensureBootstrap();
+  const params = UpdateBookingParams.safeParse(req.params);
+  const body = UpdateBookingBody.safeParse(req.body);
+  if (!params.success || !body.success) { res.status(400).json({ error: "Invalid request" }); return; }
+  const existing = await db.select().from(bookingsTable).where(eq(bookingsTable.id, params.data.id)).limit(1);
+  if (!existing[0]) { res.status(404).json({ error: "Booking not found" }); return; }
+  const [updated] = await db.update(bookingsTable).set({
+    startDate: body.data.startDate,
+    endDate: body.data.endDate,
+  }).where(eq(bookingsTable.id, params.data.id)).returning();
+  // Update Google Calendar event — fire-and-forget
+  if (existing[0].googleEventId) {
+    updateCalendarEvent(existing[0].googleEventId, {
+      personName: existing[0].personName,
+      startDate: body.data.startDate,
+      endDate: body.data.endDate,
+    }).catch(err => console.error("Google Calendar update failed:", err));
+  }
+  res.json({ ...updated, startDate: dateOnly(updated.startDate), endDate: dateOnly(updated.endDate), createdAt: iso(updated.createdAt) });
 });
 
 export default router;

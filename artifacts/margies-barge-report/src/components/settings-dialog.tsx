@@ -1,65 +1,247 @@
-import { useGetSettings, useUpdateSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings as SettingsIcon, Mail, CheckCircle, XCircle, Loader2 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Settings as SettingsIcon, Mail, CheckCircle, XCircle, Loader2,
+  Plus, Pencil, Trash2, X, Check,
+} from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type SummaryState = "idle" | "sending" | "sent" | "error";
 
-export function SettingsDialog() {
-  const { data: settings } = useGetSettings();
-  const updateSettings = useUpdateSettings();
-  const queryClient = useQueryClient();
+interface FamilyMember {
+  id: number;
+  name: string;
+  email: string | null;
+  appAccess: boolean;
+  notifications: boolean;
+  mondayEmail: boolean;
+}
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [emails, setEmails] = useState("");
-  const [summaryState, setSummaryState] = useState<SummaryState>("idle");
-  const [summaryError, setSummaryError] = useState("");
+// ── API helpers ───────────────────────────────────────────────────────────────
+
+const BASE = import.meta.env.BASE_URL + "api";
+
+async function apiFetch(path: string, opts?: RequestInit) {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (!res.ok && res.status !== 204) {
+    const json = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(json.error ?? `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// ── Add / Edit member form ────────────────────────────────────────────────────
+
+function MemberForm({
+  initial,
+  onSave,
+  onCancel,
+  saving,
+}: {
+  initial?: FamilyMember;
+  onSave: (data: Omit<FamilyMember, "id">) => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const [name, setName]                 = useState(initial?.name ?? "");
+  const [email, setEmail]               = useState(initial?.email ?? "");
+  const [appAccess, setAppAccess]       = useState(initial?.appAccess ?? false);
+  const [notifications, setNotifs]      = useState(initial?.notifications ?? false);
+  const [mondayEmail, setMonday]        = useState(initial?.mondayEmail ?? false);
+
+  const hasEmail = email.trim().length > 0;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave({
+      name: name.trim(),
+      email: hasEmail ? email.trim() : null,
+      appAccess,
+      notifications: hasEmail && notifications,
+      mondayEmail: hasEmail && mondayEmail,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="border border-border rounded-xl p-4 bg-muted/30 space-y-3 mt-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Name</Label>
+          <Input value={name} onChange={e => setName(e.target.value)} required className="h-9" placeholder="Jane" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Email (optional)</Label>
+          <Input value={email} onChange={e => setEmail(e.target.value)} type="email" className="h-9" placeholder="jane@..." />
+        </div>
+      </div>
+
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center gap-2.5">
+          <Checkbox id="fa" checked={appAccess} onCheckedChange={c => setAppAccess(!!c)} />
+          <label htmlFor="fa" className="text-xs font-sans leading-none cursor-pointer">App Access <span className="text-muted-foreground">(given URL & passcode)</span></label>
+        </div>
+        <div className={`flex items-center gap-2.5 ${!hasEmail ? "opacity-40" : ""}`}>
+          <Checkbox id="fn" checked={notifications && hasEmail} onCheckedChange={c => setNotifs(!!c)} disabled={!hasEmail} />
+          <label htmlFor="fn" className="text-xs font-sans leading-none cursor-pointer">Notifications <span className="text-muted-foreground">(calendar removals, urgent issues)</span></label>
+        </div>
+        <div className={`flex items-center gap-2.5 ${!hasEmail ? "opacity-40" : ""}`}>
+          <Checkbox id="fm" checked={mondayEmail && hasEmail} onCheckedChange={c => setMonday(!!c)} disabled={!hasEmail} />
+          <label htmlFor="fm" className="text-xs font-sans leading-none cursor-pointer">Monday Email <span className="text-muted-foreground">(weekly summary)</span></label>
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <Button type="submit" size="sm" className="h-8 text-xs" disabled={saving || !name.trim()}>
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 mr-1" />}
+          {initial ? "Save Changes" : "Add Member"}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ── Member row ────────────────────────────────────────────────────────────────
+
+function MemberRow({
+  member,
+  onEdit,
+  onDelete,
+}: {
+  member: FamilyMember;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="border border-border rounded-lg p-3 bg-white space-y-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-sans text-sm font-semibold text-foreground">{member.name}</p>
+          {member.email && <p className="font-sans text-xs text-muted-foreground">{member.email}</p>}
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <button onClick={onEdit} className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button onClick={onDelete} className="w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-sans font-medium ${member.appAccess ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+          App Access{member.appAccess ? " ✓" : ""}
+        </span>
+        {member.email && (
+          <>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-sans font-medium ${member.notifications ? "bg-amber-50 text-amber-700" : "bg-muted text-muted-foreground"}`}>
+              Notifs{member.notifications ? " ✓" : ""}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-sans font-medium ${member.mondayEmail ? "bg-green-50 text-green-700" : "bg-muted text-muted-foreground"}`}>
+              Monday{member.mondayEmail ? " ✓" : ""}
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main settings dialog ──────────────────────────────────────────────────────
+
+export function SettingsDialog() {
+  const [isOpen, setIsOpen]         = useState(false);
+  const [members, setMembers]       = useState<FamilyMember[]>([]);
+  const [loadingM, setLoadingM]     = useState(false);
+  const [adding, setAdding]         = useState(false);
+  const [editingId, setEditingId]   = useState<number | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [summaryState, setSumState] = useState<SummaryState>("idle");
+  const [summaryError, setSumErr]   = useState("");
+  const [testState, setTestState]   = useState<SummaryState>("idle");
+  const [testError, setTestErr]     = useState("");
+
+  const loadMembers = useCallback(async () => {
+    setLoadingM(true);
+    try {
+      const data = await apiFetch("/family-members") as FamilyMember[];
+      setMembers(data);
+    } catch { /* ignore */ }
+    finally { setLoadingM(false); }
+  }, []);
 
   useEffect(() => {
-    if (settings && isOpen) {
-      setEmails(settings.familyEmails.join(", "));
-      setSummaryState("idle");
-      setSummaryError("");
+    if (isOpen) {
+      void loadMembers();
+      setSumState("idle"); setSumErr("");
+      setTestState("idle"); setTestErr("");
+      setAdding(false); setEditingId(null);
     }
-  }, [settings, isOpen]);
+  }, [isOpen, loadMembers]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!settings) return;
-    await updateSettings.mutateAsync({
-      data: {
-        safeLow: settings.safeLow,
-        safeHigh: settings.safeHigh,
-        familyEmails: emails.split(",").map((e) => e.trim()).filter(Boolean),
-      },
-    });
-    queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
-    setIsOpen(false);
+  const handleAddMember = async (data: Omit<FamilyMember, "id">) => {
+    setSaving(true);
+    try {
+      await apiFetch("/family-members", { method: "POST", body: JSON.stringify(data) });
+      await loadMembers();
+      setAdding(false);
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  };
+
+  const handleEditMember = async (id: number, data: Omit<FamilyMember, "id">) => {
+    setSaving(true);
+    try {
+      await apiFetch(`/family-members/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+      await loadMembers();
+      setEditingId(null);
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  };
+
+  const handleDeleteMember = async (id: number) => {
+    setSaving(true);
+    try {
+      await apiFetch(`/family-members/${id}`, { method: "DELETE" });
+      await loadMembers();
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
   };
 
   const handleSendSummary = async () => {
-    setSummaryState("sending");
-    setSummaryError("");
+    setSumState("sending"); setSumErr("");
     try {
-      const res = await fetch(`${import.meta.env.BASE_URL}api/email/monday-summary`, { method: "POST" });
-      const json = await res.json() as { sent: boolean; error?: string; recipients?: number };
-      if (json.sent) {
-        setSummaryState("sent");
-      } else {
-        setSummaryState("error");
-        setSummaryError(json.error ?? "Unknown error");
-      }
+      const res = await apiFetch("/email/monday-summary", { method: "POST" }) as { sent: boolean; error?: string; recipients?: number };
+      if (res?.sent) { setSumState("sent"); }
+      else { setSumState("error"); setSumErr(res?.error ?? "Unknown error"); }
     } catch (err) {
-      setSummaryState("error");
-      setSummaryError(err instanceof Error ? err.message : "Network error");
+      setSumState("error"); setSumErr(err instanceof Error ? err.message : "Network error");
     }
   };
 
-  const savedEmailCount = settings?.familyEmails.length ?? 0;
+  const handleTestEmail = async () => {
+    setTestState("sending"); setTestErr("");
+    try {
+      const res = await apiFetch("/email/test", { method: "POST" }) as { sent: boolean; error?: string; to?: string };
+      if (res?.sent) { setTestState("sent"); }
+      else { setTestState("error"); setTestErr(res?.error ?? "Unknown error"); }
+    } catch (err) {
+      setTestState("error"); setTestErr(err instanceof Error ? err.message : "Network error");
+    }
+  };
+
+  const mondayCount = members.filter(m => m.mondayEmail && m.email).length;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -68,7 +250,7 @@ export function SettingsDialog() {
           <SettingsIcon className="w-5 h-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[440px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl flex items-center gap-2">
             <SettingsIcon className="w-5 h-5" />
@@ -76,30 +258,65 @@ export function SettingsDialog() {
           </DialogTitle>
         </DialogHeader>
 
-        {/* Family emails */}
-        <form onSubmit={handleSubmit} className="space-y-4 mt-1">
-          <div className="space-y-2">
-            <Label htmlFor="emails">Family Emails</Label>
-            <Input
-              id="emails"
-              value={emails}
-              onChange={(e) => setEmails(e.target.value)}
-              placeholder="john@example.com, jane@example.com"
-            />
-            <p className="text-xs text-muted-foreground">
-              Comma-separated. These get urgent issue alerts and booking removal notices automatically.
-            </p>
+        {/* ── Family Members ── */}
+        <div className="space-y-3 mt-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold font-sans">Family Members</p>
+            {!adding && (
+              <Button
+                type="button" size="sm" variant="outline" className="h-7 text-xs gap-1"
+                onClick={() => { setAdding(true); setEditingId(null); }}
+              >
+                <Plus className="w-3 h-3" /> Add Member
+              </Button>
+            )}
           </div>
-          <Button type="submit" className="w-full" disabled={updateSettings.isPending}>
-            {updateSettings.isPending ? "Saving…" : "Save"}
-          </Button>
-        </form>
 
-        {/* Monday summary */}
-        <div className="border-t pt-4 space-y-2">
+          {adding && (
+            <MemberForm
+              onSave={handleAddMember}
+              onCancel={() => setAdding(false)}
+              saving={saving}
+            />
+          )}
+
+          {loadingM ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : members.length === 0 ? (
+            <p className="text-xs text-muted-foreground font-sans text-center py-3">
+              No family members yet. Add one above.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {members.map(m => (
+                editingId === m.id ? (
+                  <MemberForm
+                    key={m.id}
+                    initial={m}
+                    onSave={data => handleEditMember(m.id, data)}
+                    onCancel={() => setEditingId(null)}
+                    saving={saving}
+                  />
+                ) : (
+                  <MemberRow
+                    key={m.id}
+                    member={m}
+                    onEdit={() => { setEditingId(m.id); setAdding(false); }}
+                    onDelete={() => handleDeleteMember(m.id)}
+                  />
+                )
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Monday Summary ── */}
+        <div className="border-t pt-4 space-y-2 mt-2">
           <p className="text-sm font-semibold font-sans">Monday Morning Summary</p>
           <p className="text-xs text-muted-foreground">
-            Sends a full status report — lake level, tasks, issues, and upcoming bookings — to all{savedEmailCount > 0 ? ` ${savedEmailCount}` : ""} family email{savedEmailCount !== 1 ? "s" : ""}.
+            Sends every Monday at 7 am to {mondayCount > 0 ? `${mondayCount} member${mondayCount !== 1 ? "s" : ""}` : "family members"} with Monday Email enabled.
           </p>
 
           {summaryState === "sent" && (
@@ -116,22 +333,51 @@ export function SettingsDialog() {
           )}
 
           <Button
-            type="button"
-            variant="outline"
-            className="w-full"
+            type="button" variant="outline" className="w-full"
             onClick={handleSendSummary}
-            disabled={summaryState === "sending" || savedEmailCount === 0}
+            disabled={summaryState === "sending" || mondayCount === 0}
           >
-            {summaryState === "sending" ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
-            ) : (
-              <><Mail className="w-4 h-4 mr-2" />Send Monday Summary Now</>
-            )}
+            {summaryState === "sending"
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
+              : <><Mail className="w-4 h-4 mr-2" />Send Monday Summary Now</>
+            }
           </Button>
 
-          {savedEmailCount === 0 && (
-            <p className="text-xs text-amber-700">Add at least one email address above and save first.</p>
+          {mondayCount === 0 && (
+            <p className="text-xs text-amber-700">Add a member with Monday Email enabled first.</p>
           )}
+        </div>
+
+        {/* ── Test Email ── */}
+        <div className="border-t pt-4 space-y-2">
+          <p className="text-sm font-semibold font-sans">Test Email</p>
+          <p className="text-xs text-muted-foreground">
+            Sends a preview of the Monday summary to the Gmail address configured on the server — just to you, not the family list.
+          </p>
+
+          {testState === "sent" && (
+            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              Test email sent! Check your inbox.
+            </div>
+          )}
+          {testState === "error" && (
+            <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{testError}</span>
+            </div>
+          )}
+
+          <Button
+            type="button" variant="outline" className="w-full"
+            onClick={handleTestEmail}
+            disabled={testState === "sending"}
+          >
+            {testState === "sending"
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
+              : <><Mail className="w-4 h-4 mr-2" />Send Test Email</>
+            }
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

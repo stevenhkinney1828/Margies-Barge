@@ -12,27 +12,23 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Loader2, Pencil, Check } from "lucide-react";
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DOW        = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = ["January","February","March","April","May","June",
+                     "July","August","September","October","November","December"];
 
 function parseDate(str: string): Date {
   const [y, m, d] = str.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
-function fmt(str: string, fmt_: string): string {
+function fmtShort(str: string): string {
   const d = parseDate(str);
-  const months = ["January","February","March","April","May","June",
-                  "July","August","September","October","November","December"];
-  const short  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return fmt_
-    .replace("MMMM", months[d.getMonth()])
-    .replace("MMM",  short[d.getMonth()])
-    .replace("yyyy", String(d.getFullYear()))
-    .replace("d",    String(d.getDate()));
+  const short = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${short[d.getMonth()]} ${d.getDate()}`;
 }
 
 function buildWeeks(year: number, month: number): (Date | null)[][] {
@@ -61,7 +57,6 @@ type Segment = {
 
 function getSegments(bookings: Booking[], weeks: (Date | null)[][]): Segment[] {
   const raw: Omit<Segment, "lane">[] = [];
-
   for (const booking of bookings) {
     const bStart = parseDate(booking.startDate);
     const bEnd   = parseDate(booking.endDate);
@@ -78,8 +73,6 @@ function getSegments(bookings: Booking[], weeks: (Date | null)[][]): Segment[] {
       if (sc !== -1) raw.push({ booking, weekIndex: wi, startCol: sc, endCol: ec });
     }
   }
-
-  // Assign vertical lanes within each week
   const segs: Segment[] = raw.map(s => ({ ...s, lane: 0 }));
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i];
@@ -99,96 +92,189 @@ function lanesInWeek(segs: Segment[], wi: number): number {
   return lanes.length === 0 ? 0 : Math.max(...lanes) + 1;
 }
 
-// ── Booking detail sheet ──────────────────────────────────────────────────
+// ── Booking Detail Modal ──────────────────────────────────────────────────────
 
-function BookingSheet({
+function BookingModal({
   booking,
   onClose,
-  onDelete,
-  deleting,
+  onDeleted,
+  onUpdated,
 }: {
   booking: Booking;
   onClose: () => void;
-  onDelete: () => void;
-  deleting: boolean;
+  onDeleted: () => void;
+  onUpdated: (b: Booking) => void;
 }) {
+  const queryClient   = useQueryClient();
+  const deleteBooking = useDeleteBooking();
   const [confirmDel, setConfirmDel] = useState(false);
-  const startStr = fmt(booking.startDate, "MMM d");
-  const endStr   = fmt(booking.endDate,   "MMM d");
+  const [deleting, setDeleting]     = useState(false);
+  const [editing, setEditing]       = useState(false);
+  const [editStart, setEditStart]   = useState(booking.startDate);
+  const [editEnd, setEditEnd]       = useState(booking.endDate);
+  const [saveErr, setSaveErr]       = useState("");
+  const [saving, setSaving]         = useState(false);
+
+  const startStr = fmtShort(booking.startDate);
+  const endStr   = fmtShort(booking.endDate);
   const year     = parseDate(booking.endDate).getFullYear();
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteBooking.mutateAsync({ id: booking.id });
+      queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+      onDeleted();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editStart || !editEnd) return;
+    if (editStart > editEnd) { setSaveErr("Arrival must be before departure."); return; }
+    setSaving(true); setSaveErr("");
+    try {
+      const res = await fetch(
+        `${import.meta.env.BASE_URL}api/bookings/${booking.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ startDate: editStart, endDate: editEnd }),
+        }
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+      const updated = await res.json() as Booking;
+      queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+      onUpdated(updated);
+      setEditing(false);
+    } catch (err) {
+      setSaveErr(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/30 z-40"
-        onClick={onClose}
-      />
-      {/* Sheet */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl px-6 pt-5 pb-8 max-w-[430px] mx-auto">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="font-serif text-2xl font-semibold text-foreground leading-tight">
-              {booking.personName}
-            </p>
-            <p className="text-sm text-muted-foreground font-sans mt-1">
-              {startStr} – {endStr}, {year}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-muted hover:bg-muted/80 text-muted-foreground -mr-1"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Delete */}
-        <div className="border-t border-border pt-4">
-          {!confirmDel ? (
-            <button
-              onClick={() => setConfirmDel(true)}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-destructive transition-colors font-sans"
-            >
-              <Trash2 className="w-4 h-4" />
-              Remove this visit
-            </button>
-          ) : (
-            <div className="flex items-center gap-3">
-              <Button
-                variant="destructive" size="sm"
-                onClick={onDelete}
-                disabled={deleting}
-                className="h-8 text-xs"
-              >
-                {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : "Confirm remove"}
-              </Button>
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+      {/* Centered card */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-6 pointer-events-none">
+        <div className="w-full max-w-[360px] bg-white rounded-2xl shadow-2xl pointer-events-auto overflow-hidden">
+          {/* Header */}
+          <div className="bg-primary px-6 pt-5 pb-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="font-serif text-2xl font-semibold text-white leading-tight">
+                  {booking.personName}
+                </p>
+                <p className="text-sm text-primary-foreground/70 font-sans mt-1">
+                  {startStr} – {endStr}, {year}
+                </p>
+              </div>
               <button
-                onClick={() => setConfirmDel(false)}
-                className="text-xs text-muted-foreground font-sans hover:text-foreground"
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 text-white -mr-1 -mt-0.5"
               >
-                Cancel
+                <X className="w-4 h-4" />
               </button>
             </div>
-          )}
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-5 space-y-4">
+            {/* Edit form */}
+            {editing ? (
+              <form onSubmit={handleSaveEdit} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Arrival</Label>
+                    <Input type="date" value={editStart} onChange={e => setEditStart(e.target.value)} className="h-9" required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Departure</Label>
+                    <Input type="date" value={editEnd} onChange={e => setEditEnd(e.target.value)} className="h-9" required />
+                  </div>
+                </div>
+                {saveErr && <p className="text-xs text-destructive">{saveErr}</p>}
+                <div className="flex gap-2">
+                  <Button type="submit" size="sm" className="h-8 text-xs" disabled={saving}>
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 mr-1" />}
+                    Save Changes
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setEditing(false); setSaveErr(""); }}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              /* Action buttons */
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-9 text-sm gap-1.5"
+                  onClick={() => { setEditing(true); setConfirmDel(false); }}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </Button>
+                {!confirmDel ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 h-9 text-sm gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5"
+                    onClick={() => setConfirmDel(true)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Remove Visit
+                  </Button>
+                ) : (
+                  <div className="flex-1 flex flex-col gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      className="w-full h-9 text-sm"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                    >
+                      {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : "Confirm Remove"}
+                    </Button>
+                    <button
+                      onClick={() => setConfirmDel(false)}
+                      className="text-xs text-center text-muted-foreground hover:text-foreground font-sans"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
   );
 }
 
-// ── Add Visit dialog ──────────────────────────────────────────────────────
+// ── Add Visit dialog ──────────────────────────────────────────────────────────
 
 function AddVisitDialog() {
   const queryClient   = useQueryClient();
   const createBooking = useCreateBooking();
-  const [isOpen, setIsOpen]               = useState(false);
-  const [personName, setPersonName]       = useState("");
-  const [startDate, setStartDate]         = useState("");
-  const [endDate, setEndDate]             = useState("");
-  const [spokeWithUncles, setUncles]      = useState(false);
-  const [spokeWithCousins, setCousins]    = useState(false);
-  const [formError, setFormError]         = useState("");
+  const [isOpen, setIsOpen]            = useState(false);
+  const [personName, setPersonName]    = useState("");
+  const [startDate, setStartDate]      = useState("");
+  const [endDate, setEndDate]          = useState("");
+  const [spokeWithUncles, setUncles]   = useState(false);
+  const [spokeWithCousins, setCousins] = useState(false);
+  const [formError, setFormError]      = useState("");
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,15 +327,11 @@ function AddVisitDialog() {
             <p className="text-sm font-medium">House Rules Checklist</p>
             <div className="flex items-start space-x-3">
               <Checkbox id="uncles" checked={spokeWithUncles} onCheckedChange={c => setUncles(!!c)} />
-              <label htmlFor="uncles" className="text-sm leading-none mt-0.5">
-                I have cleared this with the Uncles
-              </label>
+              <label htmlFor="uncles" className="text-sm leading-none mt-0.5">I have cleared this with the Uncles</label>
             </div>
             <div className="flex items-start space-x-3">
               <Checkbox id="cousins" checked={spokeWithCousins} onCheckedChange={c => setCousins(!!c)} />
-              <label htmlFor="cousins" className="text-sm leading-none mt-0.5">
-                I have notified the Cousins text thread
-              </label>
+              <label htmlFor="cousins" className="text-sm leading-none mt-0.5">I have notified the Cousins text thread</label>
             </div>
           </div>
           {formError && (
@@ -257,11 +339,7 @@ function AddVisitDialog() {
               {formError}
             </p>
           )}
-          <Button
-            type="submit"
-            className="w-full h-11 font-serif text-base"
-            disabled={createBooking.isPending}
-          >
+          <Button type="submit" className="w-full h-11 font-serif text-base" disabled={createBooking.isPending}>
             {createBooking.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add to Calendar"}
           </Button>
         </form>
@@ -270,23 +348,22 @@ function AddVisitDialog() {
   );
 }
 
-// ── Main calendar grid ────────────────────────────────────────────────────
+// ── Calendar grid constants ───────────────────────────────────────────────────
 
-const DAY_NUM_HEIGHT = 26; // px reserved for the day number row
-const BAR_HEIGHT     = 20; // px per booking bar
-const BAR_GAP        = 3;  // px between stacked bars
-const CELL_PAD_TOP   = 4;  // px above day numbers
+const DAY_NUM_HEIGHT = 26;
+const BAR_HEIGHT     = 20;
+const BAR_GAP        = 3;
+const CELL_PAD_TOP   = 4;
+
+// ── Main CalendarTab ──────────────────────────────────────────────────────────
 
 export function CalendarTab() {
   const { data: bookings, isLoading } = useListBookings();
-  const queryClient  = useQueryClient();
-  const deleteBooking = useDeleteBooking();
 
   const today = new Date();
   const [viewYear,  setViewYear]  = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth()); // 0-based
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selected,  setSelected]  = useState<Booking | null>(null);
-  const [deleting,  setDeleting]  = useState(false);
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -297,23 +374,8 @@ export function CalendarTab() {
     else setViewMonth(m => m + 1);
   };
 
-  const MONTH_NAMES = ["January","February","March","April","May","June",
-                       "July","August","September","October","November","December"];
-
   const weeks = buildWeeks(viewYear, viewMonth);
   const segs  = getSegments(bookings ?? [], weeks);
-
-  const handleDelete = async () => {
-    if (!selected) return;
-    setDeleting(true);
-    try {
-      await deleteBooking.mutateAsync({ id: selected.id });
-      queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
-      setSelected(null);
-    } finally {
-      setDeleting(false);
-    }
-  };
 
   if (isLoading) return (
     <div className="flex justify-center pt-16">
@@ -323,14 +385,14 @@ export function CalendarTab() {
 
   return (
     <div className="pb-8">
-      {/* Header row: nav + add button */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={prevMonth}
             aria-label="Previous month"
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted text-foreground active:bg-muted"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted text-foreground"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -341,7 +403,7 @@ export function CalendarTab() {
             type="button"
             onClick={nextMonth}
             aria-label="Next month"
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted text-foreground active:bg-muted"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted text-foreground"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -349,7 +411,7 @@ export function CalendarTab() {
         <AddVisitDialog />
       </div>
 
-      {/* Day-of-week header */}
+      {/* DOW header */}
       <div className="grid grid-cols-7 mb-1">
         {DOW.map(d => (
           <div key={d} className="text-center text-[10px] font-bold font-sans uppercase tracking-wide text-muted-foreground py-1">
@@ -358,10 +420,10 @@ export function CalendarTab() {
         ))}
       </div>
 
-      {/* Calendar grid */}
+      {/* Grid */}
       <div className="border border-border rounded-xl overflow-hidden">
         {weeks.map((week, wi) => {
-          const lanes = lanesInWeek(segs, wi);
+          const lanes     = lanesInWeek(segs, wi);
           const rowHeight = CELL_PAD_TOP + DAY_NUM_HEIGHT + (lanes > 0 ? lanes * (BAR_HEIGHT + BAR_GAP) + BAR_GAP : 6);
           const weekSegs  = segs.filter(s => s.weekIndex === wi);
 
@@ -371,28 +433,19 @@ export function CalendarTab() {
               className="relative grid grid-cols-7 border-b border-border last:border-b-0"
               style={{ minHeight: rowHeight }}
             >
-              {/* Day number cells */}
               {week.map((day, di) => {
                 const isToday = day &&
                   day.getDate() === today.getDate() &&
                   day.getMonth() === today.getMonth() &&
                   day.getFullYear() === today.getFullYear();
-                const isCurrentMonth = day !== null;
-
                 return (
                   <div
                     key={di}
-                    className={`border-r border-border last:border-r-0 ${isCurrentMonth ? "bg-white" : "bg-muted/20"}`}
+                    className={`border-r border-border last:border-r-0 ${day ? "bg-white" : "bg-muted/20"}`}
                   >
                     <div className="flex justify-center pt-1">
                       {day && (
-                        <span
-                          className={`text-xs font-sans w-5 h-5 flex items-center justify-center rounded-full leading-none select-none
-                            ${isToday
-                              ? "bg-primary text-white font-bold"
-                              : "text-muted-foreground"
-                            }`}
-                        >
+                        <span className={`text-xs font-sans w-5 h-5 flex items-center justify-center rounded-full leading-none select-none ${isToday ? "bg-primary text-white font-bold" : "text-muted-foreground"}`}>
                           {day.getDate()}
                         </span>
                       )}
@@ -401,26 +454,25 @@ export function CalendarTab() {
                 );
               })}
 
-              {/* Booking bars — absolutely positioned over the week row */}
-              {weekSegs.map((seg) => {
-                const colW   = 100 / 7;
-                const left   = `${seg.startCol * colW}%`;
-                const width  = `${(seg.endCol - seg.startCol + 1) * colW}%`;
-                const top    = CELL_PAD_TOP + DAY_NUM_HEIGHT + seg.lane * (BAR_HEIGHT + BAR_GAP) + BAR_GAP;
-                const isSelected = selected?.id === seg.booking.id;
-
+              {/* Booking bars */}
+              {weekSegs.map(seg => {
+                const colW  = 100 / 7;
+                const left  = `${seg.startCol * colW}%`;
+                const width = `${(seg.endCol - seg.startCol + 1) * colW}%`;
+                const top   = CELL_PAD_TOP + DAY_NUM_HEIGHT + seg.lane * (BAR_HEIGHT + BAR_GAP) + BAR_GAP;
+                const isSel = selected?.id === seg.booking.id;
                 return (
                   <button
                     key={`${seg.booking.id}-${wi}`}
                     onClick={() => setSelected(seg.booking)}
-                    className="absolute flex items-center overflow-hidden cursor-pointer group"
+                    className="absolute flex items-center overflow-hidden cursor-pointer"
                     style={{
                       left: `calc(${left} + 1px)`,
                       width: `calc(${width} - 2px)`,
                       top,
                       height: BAR_HEIGHT,
                       padding: "0 6px",
-                      background: isSelected ? "#0f2a47" : "#1e3a5f",
+                      background: isSel ? "#0f2a47" : "#1e3a5f",
                       borderRadius: 4,
                     }}
                   >
@@ -435,13 +487,13 @@ export function CalendarTab() {
         })}
       </div>
 
-      {/* Booking detail sheet */}
+      {/* Booking modal */}
       {selected && (
-        <BookingSheet
+        <BookingModal
           booking={selected}
           onClose={() => setSelected(null)}
-          onDelete={handleDelete}
-          deleting={deleting}
+          onDeleted={() => setSelected(null)}
+          onUpdated={(updated) => setSelected(updated)}
         />
       )}
     </div>

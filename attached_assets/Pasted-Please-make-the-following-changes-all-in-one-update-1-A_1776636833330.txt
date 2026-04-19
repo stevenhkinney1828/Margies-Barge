@@ -1,0 +1,61 @@
+Please make the following changes all in one update:
+
+1. APP PASSCODE
+Add a simple passcode lock to the entire app. When someone opens the URL for the first time they see a clean welcome screen with the Margie's Barge Report header, an anchor emoji, a passcode entry field, and a Submit button. The passcode is 9530. If they enter it correctly they get full access and the app remembers them so they do not have to enter it every visit (store in localStorage). If wrong, show a simple "Incorrect passcode" message. The welcome screen should match the app's navy and white design.
+
+2. FAMILY MEMBERS IN ADMIN SETTINGS
+Replace the current email list in admin settings with a full Family Members section. Each family member has these four fields:
+   - Name
+   - Email address (optional)
+   - App Access checkbox -- just a tracking checkbox so admin knows who has been given the URL and passcode. Does not technically restrict access, just for admin record keeping.
+   - Notifications checkbox -- if checked and they have an email, they receive all instant notification emails (calendar removals, urgent issues, urgent issue resolutions)
+   - Monday Email checkbox -- if checked and they have an email, they receive the Monday morning summary email
+
+Only show Notifications and Monday Email checkboxes if an email address has been entered for that person. If no email, those checkboxes are greyed out.
+
+Add New Member button opens a simple form: name field, optional email field, and the three checkboxes. Save adds them to the list.
+
+Each person in the list can be edited or deleted.
+
+3. CALENDAR POPUP FIX
+When a user taps a booking bar on the calendar grid, show a centered modal card in the middle of the screen instead of a bottom sheet. The modal should have:
+   - Person's name in large text
+   - Their booked dates below (e.g. "Apr 25 – Apr 26, 2026")
+   - An Edit button and a Remove Visit button
+   - A close X in the top right corner
+   - Clean white card with navy text, rounded corners, subtle shadow
+
+4. EDIT BOOKING
+When the user taps Edit inside the booking modal:
+   - Show a simple form with start date and end date pickers, pre-filled with the current dates
+   - A Save Changes button
+   - Saving updates the booking in the database, updates the Google Calendar event, and refreshes the calendar grid in real time
+   - No email notification goes out for edits, only for removals
+
+5. EMAIL SYSTEM
+- Use Gmail SMTP with GMAIL_USER and GMAIL_APP_PASSWORD secrets for all email sending
+- Sender name: "Margie's Barge Report"
+- Monday 7am email goes to all family members with Monday Email checked and an email address
+- Instant notifications go to all family members with Notifications checked and an email address
+- Instant notification triggers and copy:
+   - Calendar removal: "Hey everyone -- just a heads up that [Name] had to free up [start date] to [end date] at the lake. Those days are open again if anyone wants them!"
+   - Urgent issue posted: "Hey everyone -- [Name] flagged something at the lake that needs attention. Check the app for details and the photo."
+   - Urgent issue resolved: "Good news -- [Name] resolved the issue flagged at the lake. [Their resolution note]"
+
+6. MONDAY EMAIL CONTENT
+Subject: "Margie's Barge Report -- [Month Day, Year]"
+Content in this order, skip any section that has nothing to report:
+   - Lake level status: current elevation, clearance up and down, plain language status
+   - 7-day rainfall outlook for Gainesville GA from National Weather Service
+   - Tasks overdue or due within 14 days
+   - Tasks coming due in the next 30 days
+   - Bring Next Time list if anything is on it
+   - Open issues still unresolved
+   - Notable activity since last Monday
+   - Open calendar slots in the next 60 days, encouraging casual tone
+   - Link to the app
+   - Final line: "Lake data last successfully pulled: [date and time]"
+   - HTML formatted, mobile friendly, navy header, white card sections, warm casual tone
+
+7. TEST EMAIL BUTTON
+Add a Send Test Email button in admin settings that sends the full Monday morning email to just GMAIL_USER so the content and formatting can be verified before it goes to the family list.
