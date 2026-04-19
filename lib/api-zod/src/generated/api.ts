@@ -19,8 +19,6 @@ export const HealthCheckResponse = zod.object({
  */
 export const GetDashboardResponse = zod.object({
   settings: zod.object({
-    safeLow: zod.number(),
-    safeHigh: zod.number(),
     familyEmails: zod.array(zod.string()),
   }),
   lakeLevel: zod.object({
@@ -66,8 +64,6 @@ export const GetDashboardResponse = zod.object({
  * @summary Get app settings
  */
 export const GetSettingsResponse = zod.object({
-  safeLow: zod.number(),
-  safeHigh: zod.number(),
   familyEmails: zod.array(zod.string()),
 });
 
@@ -75,14 +71,10 @@ export const GetSettingsResponse = zod.object({
  * @summary Update app settings
  */
 export const UpdateSettingsBody = zod.object({
-  safeLow: zod.number().optional(),
-  safeHigh: zod.number().optional(),
   familyEmails: zod.array(zod.string()).optional(),
 });
 
 export const UpdateSettingsResponse = zod.object({
-  safeLow: zod.number(),
-  safeHigh: zod.number(),
   familyEmails: zod.array(zod.string()),
 });
 

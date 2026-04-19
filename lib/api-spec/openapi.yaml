@@ -338,22 +338,14 @@ components:
     Settings:
       type: object
       properties:
-        safeLow:
-          type: number
-        safeHigh:
-          type: number
         familyEmails:
           type: array
           items:
             type: string
-      required: [safeLow, safeHigh, familyEmails]
+      required: [familyEmails]
     SettingsUpdate:
       type: object
       properties:
-        safeLow:
-          type: number
-        safeHigh:
-          type: number
         familyEmails:
           type: array
           items:

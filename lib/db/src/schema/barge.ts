@@ -14,8 +14,6 @@ import { z } from "zod/v4";
 
 export const settingsTable = pgTable("barge_settings", {
   id: integer("id").primaryKey().default(1),
-  safeLow: numeric("safe_low", { precision: 8, scale: 2 }).notNull().default("1060.00"),
-  safeHigh: numeric("safe_high", { precision: 8, scale: 2 }).notNull().default("1071.00"),
   familyEmails: text("family_emails").array().notNull().default(sql`ARRAY[]::text[]`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -26,7 +26,7 @@ export function DockTab() {
   );
   if (error || !dashboard) return <div className="p-4 text-destructive text-sm">Failed to load dashboard data.</div>;
 
-  const { lakeLevel, lakeHistory, settings, lastDockAdjustment, weather } = dashboard;
+  const { lakeLevel, lakeHistory, lastDockAdjustment, weather } = dashboard;
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,8 +256,6 @@ export function DockTab() {
                   formatter={(v: number) => [`${v.toFixed(2)}'`, "Elevation"]} />
                 {upperDockLimit != null && <ReferenceLine y={upperDockLimit} stroke="#10b981" strokeDasharray="4 3" strokeWidth={1.5} />}
                 {lowerDockLimit != null && <ReferenceLine y={lowerDockLimit} stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1.5} />}
-                {upperDockLimit == null && <ReferenceLine y={settings.safeHigh} stroke="var(--destructive)" strokeDasharray="3 3" opacity={0.3} />}
-                {lowerDockLimit == null && <ReferenceLine y={settings.safeLow} stroke="var(--destructive)" strokeDasharray="3 3" opacity={0.3} />}
                 <Line type="monotone" dataKey="elevation" stroke="hsl(var(--primary))" strokeWidth={2.5}
                   dot={false} activeDot={{ r: 4 }} />
               </LineChart>

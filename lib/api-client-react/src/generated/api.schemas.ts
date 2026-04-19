@@ -10,14 +10,10 @@ export interface HealthStatus {
 }
 
 export interface Settings {
-  safeLow: number;
-  safeHigh: number;
   familyEmails: string[];
 }
 
 export interface SettingsUpdate {
-  safeLow?: number;
-  safeHigh?: number;
   familyEmails?: string[];
 }
 

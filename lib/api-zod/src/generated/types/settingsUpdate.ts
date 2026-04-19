@@ -7,7 +7,5 @@
  */
 
 export interface SettingsUpdate {
-  safeLow?: number;
-  safeHigh?: number;
   familyEmails?: string[];
 }

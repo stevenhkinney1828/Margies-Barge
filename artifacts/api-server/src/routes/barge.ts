@@ -61,7 +61,7 @@ const DEFAULT_TASKS = [
 async function ensureBootstrap(): Promise<void> {
   if (bootstrapped) return;
 
-  await db.insert(settingsTable).values({ id: 1, safeLow: "1060.00", safeHigh: "1071.00", familyEmails: [] }).onConflictDoNothing();
+  await db.insert(settingsTable).values({ id: 1, familyEmails: [] }).onConflictDoNothing();
 
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(tasksTable);
   if (count === 0) {
@@ -161,8 +161,6 @@ function taskResponse(task: typeof tasksTable.$inferSelect) {
 
 function settingsResponse(row: typeof settingsTable.$inferSelect) {
   return {
-    safeLow: Number(row.safeLow),
-    safeHigh: Number(row.safeHigh),
     familyEmails: row.familyEmails,
   };
 }
@@ -188,8 +186,21 @@ function parseActiveMonths(activeMonths: string | null | undefined): { start: nu
   return { start: found[0] ?? null, end: found[1] ?? found[0] ?? null };
 }
 
-async function fetchLake(settings: { safeLow: number; safeHigh: number }) {
+async function fetchLake(limits: { upperDockLimit: number | null; lowerDockLimit: number | null }) {
   const url = "https://waterservices.usgs.gov/nwis/iv/?sites=02334480&parameterCd=00062&format=json";
+  const computeDerived = (elevation: number) => {
+    const clearanceUp = limits.upperDockLimit != null ? Number((limits.upperDockLimit - elevation).toFixed(2)) : 0;
+    const clearanceDown = limits.lowerDockLimit != null ? Number((elevation - limits.lowerDockLimit).toFixed(2)) : 0;
+    let status: "ALL CLEAR" | "WARNING" | "DANGER" = "ALL CLEAR";
+    let percentSafe = 50;
+    if (limits.upperDockLimit != null && limits.lowerDockLimit != null) {
+      if (elevation > limits.upperDockLimit || elevation < limits.lowerDockLimit) status = "DANGER";
+      else if (clearanceUp < 1 || clearanceDown < 1) status = "WARNING";
+      const range = limits.upperDockLimit - limits.lowerDockLimit;
+      percentSafe = range > 0 ? Math.max(0, Math.min(100, ((elevation - limits.lowerDockLimit) / range) * 100)) : 50;
+    }
+    return { clearanceUp, clearanceDown, status, percentSafe: Number(percentSafe.toFixed(1)) };
+  };
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`USGS returned ${response.status}`);
@@ -200,13 +211,10 @@ async function fetchLake(settings: { safeLow: number; safeHigh: number }) {
     const elevation = Number(latest.value);
     const pulledAt = latest.dateTime;
     const stale = Date.now() - new Date(pulledAt).getTime() > 86_400_000;
-    const clearanceDown = Number((elevation - settings.safeLow).toFixed(2));
-    const clearanceUp = Number((settings.safeHigh - elevation).toFixed(2));
-    const percentSafe = Math.max(0, Math.min(100, ((elevation - settings.safeLow) / (settings.safeHigh - settings.safeLow)) * 100));
-    const status = elevation < settings.safeLow || elevation > settings.safeHigh ? "DANGER" : clearanceDown < 1 || clearanceUp < 1 ? "WARNING" : "ALL CLEAR";
-    return { elevation, pulledAt, status, percentSafe: Number(percentSafe.toFixed(1)), clearanceDown, clearanceUp, stale };
+    return { elevation, pulledAt, stale, ...computeDerived(elevation) };
   } catch (error) {
-    return { elevation: 1065.96, pulledAt: new Date(0).toISOString(), status: "WARNING" as const, percentSafe: 54.2, clearanceDown: 5.96, clearanceUp: 5.04, stale: true };
+    const elevation = 1065.96;
+    return { elevation, pulledAt: new Date(0).toISOString(), stale: true, ...computeDerived(elevation) };
   }
 }
 
@@ -295,7 +303,12 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
   const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
   const settings = settingsResponse(settingsRow);
   const [lastDockAdjustment] = await db.select().from(dockAdjustmentsTable).orderBy(desc(dockAdjustmentsTable.workDate), desc(dockAdjustmentsTable.createdAt)).limit(1);
-  const [lakeLevel, lakeHistory, weather] = await Promise.all([fetchLake(settings), fetchLakeHistory(), fetchWeather()]);
+  const loggedElev = lastDockAdjustment?.lakeElevation == null ? null : Number(lastDockAdjustment.lakeElevation);
+  const loggedUp = lastDockAdjustment?.clearanceUp == null ? null : Number(lastDockAdjustment.clearanceUp);
+  const loggedDown = lastDockAdjustment?.clearanceDown == null ? null : Number(lastDockAdjustment.clearanceDown);
+  const upperDockLimit = loggedElev != null && loggedUp != null ? loggedElev + loggedUp : null;
+  const lowerDockLimit = loggedElev != null && loggedDown != null ? loggedElev - loggedDown : null;
+  const [lakeLevel, lakeHistory, weather] = await Promise.all([fetchLake({ upperDockLimit, lowerDockLimit }), fetchLakeHistory(), fetchWeather()]);
   res.json(GetDashboardResponse.parse({
     settings,
     lakeLevel,
@@ -321,8 +334,6 @@ router.patch("/settings", async (req, res): Promise<void> => {
   const current = await db.select().from(settingsTable).where(eq(settingsTable.id, 1)).limit(1);
   const existing = current[0];
   const [updated] = await db.update(settingsTable).set({
-    safeLow: parsed.data.safeLow == null ? existing.safeLow : String(parsed.data.safeLow),
-    safeHigh: parsed.data.safeHigh == null ? existing.safeHigh : String(parsed.data.safeHigh),
     familyEmails: parsed.data.familyEmails ?? existing.familyEmails,
   }).where(eq(settingsTable.id, 1)).returning();
   res.json(UpdateSettingsResponse.parse(settingsResponse(updated)));
@@ -421,11 +432,9 @@ router.post("/dock-adjustments", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error?.message ?? "Invalid body" });
     return;
   }
-  const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
-  const settings = settingsResponse(settingsRow);
   const today = new Date().toISOString().slice(0, 10);
   const historicalLake = await fetchLakeLevelForDate(body.data.workDate);
-  const currentLake = historicalLake == null && body.data.workDate === today ? await fetchLake(settings) : null;
+  const currentLake = historicalLake == null && body.data.workDate === today ? await fetchLake({ upperDockLimit: null, lowerDockLimit: null }) : null;
   const lakeForDate = historicalLake ?? (currentLake == null ? null : { elevation: currentLake.elevation, pulledAt: currentLake.pulledAt });
   const [adjustment] = await db.insert(dockAdjustmentsTable).values({
     personName: body.data.personName,
@@ -621,11 +630,15 @@ export async function buildMondayEmailHtml(): Promise<{ html: string; subject: s
   const in14 = addDays(todayStr, 14);
   const in30 = addDays(todayStr, 30);
 
-  const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
-  const settings = settingsResponse(settingsRow);
+  const [lastDockAdj] = await db.select().from(dockAdjustmentsTable).orderBy(desc(dockAdjustmentsTable.workDate), desc(dockAdjustmentsTable.createdAt)).limit(1);
+  const loggedElev = lastDockAdj?.lakeElevation == null ? null : Number(lastDockAdj.lakeElevation);
+  const loggedUp = lastDockAdj?.clearanceUp == null ? null : Number(lastDockAdj.clearanceUp);
+  const loggedDown = lastDockAdj?.clearanceDown == null ? null : Number(lastDockAdj.clearanceDown);
+  const upperDockLimit = loggedElev != null && loggedUp != null ? loggedElev + loggedUp : null;
+  const lowerDockLimit = loggedElev != null && loggedDown != null ? loggedElev - loggedDown : null;
 
-  const [lakeLevel, weather, tasks, issues, bringRows, activityRows, lastDockAdj] = await Promise.all([
-    fetchLake(settings),
+  const [lakeLevel, weather, tasks, issues, bringRows, activityRows] = await Promise.all([
+    fetchLake({ upperDockLimit, lowerDockLimit }),
     fetchWeather(),
     db.select().from(tasksTable).orderBy(tasksTable.id),
     db.select().from(issuesTable).where(eq(issuesTable.status, "open")),
@@ -633,16 +646,8 @@ export async function buildMondayEmailHtml(): Promise<{ html: string; subject: s
     db.select().from(activityEntriesTable)
       .where(gte(activityEntriesTable.actionDate, addDays(todayStr, -7)))
       .orderBy(desc(activityEntriesTable.createdAt)).limit(20),
-    db.select().from(dockAdjustmentsTable).orderBy(desc(dockAdjustmentsTable.workDate), desc(dockAdjustmentsTable.createdAt)).limit(1),
   ]);
 
-  // Compute clearance to dock limits (matches Dock tab math)
-  const adj = lastDockAdj[0];
-  const loggedElev = adj?.lakeElevation == null ? null : Number(adj.lakeElevation);
-  const loggedUp = adj?.clearanceUp == null ? null : Number(adj.clearanceUp);
-  const loggedDown = adj?.clearanceDown == null ? null : Number(adj.clearanceDown);
-  const upperDockLimit = loggedElev != null && loggedUp != null ? loggedElev + loggedUp : null;
-  const lowerDockLimit = loggedElev != null && loggedDown != null ? loggedElev - loggedDown : null;
   const toUpperDock = upperDockLimit != null ? Number((upperDockLimit - lakeLevel.elevation).toFixed(2)) : null;
   const toLowerDock = lowerDockLimit != null ? Number((lakeLevel.elevation - lowerDockLimit).toFixed(2)) : null;
 
