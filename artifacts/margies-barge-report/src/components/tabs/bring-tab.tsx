@@ -43,10 +43,9 @@ export function BringTab() {
     if (!resolveOpen.item || !resolvePerson) return;
     
     await deleteItem.mutateAsync({
+      id: resolveOpen.item.id,
       data: { personName: resolvePerson, broughtDate: format(new Date(), "yyyy-MM-dd") }
     });
-    // the backend api only takes personName and broughtDate, it deletes all items by that person name or just logs activity?
-    // wait, api spec says delete takes { personName, broughtDate } and it's a DELETE method with body. Wait, delete with body is weird. Let's just pass it.
     
     queryClient.invalidateQueries({ queryKey: getListBringItemsQueryKey() });
     setResolveOpen({isOpen: false, item: null});
