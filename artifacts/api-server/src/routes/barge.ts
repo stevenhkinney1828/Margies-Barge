@@ -614,17 +614,17 @@ router.get("/activity", async (_req, res): Promise<void> => {
   res.json(ListActivityResponse.parse(entries.map((entry) => ({ ...entry, actionDate: dateOnly(entry.actionDate), createdAt: iso(entry.createdAt) }))));
 });
 
-async function buildMondayEmailHtml(): Promise<{ html: string; subject: string }> {
+export async function buildMondayEmailHtml(): Promise<{ html: string; subject: string }> {
   const today = new Date();
+  const todayMs = today.getTime();
   const todayStr = today.toISOString().slice(0, 10);
   const in14 = addDays(todayStr, 14);
   const in30 = addDays(todayStr, 30);
-  const in60 = addDays(todayStr, 60);
 
   const [settingsRow] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
   const settings = settingsResponse(settingsRow);
 
-  const [lakeLevel, weather, tasks, issues, bringRows, activityRows, allBookings] = await Promise.all([
+  const [lakeLevel, weather, tasks, issues, bringRows, activityRows] = await Promise.all([
     fetchLake(settings),
     fetchWeather(),
     db.select().from(tasksTable).orderBy(tasksTable.id),
@@ -633,15 +633,22 @@ async function buildMondayEmailHtml(): Promise<{ html: string; subject: string }
     db.select().from(activityEntriesTable)
       .where(gte(activityEntriesTable.actionDate, addDays(todayStr, -7)))
       .orderBy(desc(activityEntriesTable.createdAt)).limit(20),
-    db.select().from(bookingsTable)
-      .where(and(gte(bookingsTable.startDate, todayStr), lte(bookingsTable.startDate, in60)))
-      .orderBy(bookingsTable.startDate),
   ]);
 
   const overdueTasks = tasks.filter(t => taskStatus(t) === "overdue")
-    .map(t => ({ icon: t.icon, name: t.name, nextDueDate: t.lastDoneDate ? addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) : null }));
+    .map(t => {
+      const nextDueDate = t.lastDoneDate ? addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) : null;
+      const daysOverdue = nextDueDate ? Math.floor((todayMs - new Date(nextDueDate).getTime()) / 86400000) : undefined;
+      return { icon: t.icon, name: t.name, nextDueDate, daysOverdue, lastDoneBy: t.lastDoneBy, lastDoneDate: t.lastDoneDate ? dateOnly(t.lastDoneDate) : null };
+    });
+
   const dueSoonTasks = tasks.filter(t => taskStatus(t) === "due-soon")
-    .map(t => ({ icon: t.icon, name: t.name, nextDueDate: t.lastDoneDate ? addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) : null }));
+    .map(t => {
+      const nextDueDate = t.lastDoneDate ? addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) : null;
+      const daysRemaining = nextDueDate ? Math.max(0, Math.floor((new Date(nextDueDate).getTime() - todayMs) / 86400000)) : undefined;
+      return { icon: t.icon, name: t.name, nextDueDate, daysRemaining, lastDoneBy: t.lastDoneBy, lastDoneDate: t.lastDoneDate ? dateOnly(t.lastDoneDate) : null };
+    });
+
   const upcomingTasks = tasks.filter(t => {
     const last = dateOnly(t.lastDoneDate);
     if (!last) return false;
@@ -649,27 +656,8 @@ async function buildMondayEmailHtml(): Promise<{ html: string; subject: string }
     return next > in14 && next <= in30 && taskStatus(t) !== "seasonal";
   }).map(t => ({ icon: t.icon, name: t.name, nextDueDate: addDays(dateOnly(t.lastDoneDate)!, t.cadenceDays) }));
 
-  // Find open 3-day+ slots between today and +60 days
-  const bookedRanges = allBookings.map(b => ({
-    start: dateOnly(b.startDate)!,
-    end: dateOnly(b.endDate)!,
-  }));
-  const openSlots: Array<{ start: string; end: string }> = [];
-  let cursor = todayStr;
-  for (const range of bookedRanges) {
-    if (cursor < range.start) {
-      const daysGap = (new Date(range.start).getTime() - new Date(cursor).getTime()) / 86400000;
-      if (daysGap >= 3) openSlots.push({ start: cursor, end: addDays(range.start, -1) });
-    }
-    cursor = addDays(range.end, 1);
-  }
-  if (cursor < in60) {
-    const daysLeft = (new Date(in60).getTime() - new Date(cursor).getTime()) / 86400000;
-    if (daysLeft >= 3) openSlots.push({ start: cursor, end: in60 });
-  }
-
   const appUrl = process.env.APP_URL ?? "https://margiebargereport.replit.app";
-  const subject = `⚓ Margie's Barge Report — ${today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
+  const subject = `Margie's Barge Report -- ${today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
 
   const html = mondaySummaryHtml({
     lakeElevation: lakeLevel.elevation,
@@ -681,10 +669,9 @@ async function buildMondayEmailHtml(): Promise<{ html: string; subject: string }
     overdueTasks,
     dueSoonTasks,
     upcomingTasks,
-    bringItems: bringRows.map(b => ({ description: b.description, personName: b.personName })),
-    openIssues: issues.map(i => ({ caption: i.caption, personName: i.personName, urgent: i.urgent })),
+    bringItems: bringRows.map(b => ({ description: b.description, personName: b.personName, createdAt: b.createdAt ? dateOnly(b.createdAt) : null })),
+    openIssues: issues.map(i => ({ caption: i.caption, personName: i.personName, urgent: i.urgent, createdAt: i.createdAt ? dateOnly(i.createdAt) : null })),
     recentActivity: activityRows.map(a => ({ personName: a.personName, action: a.action, actionDate: dateOnly(a.actionDate)! })),
-    openSlots,
     appUrl,
   });
   return { html, subject };

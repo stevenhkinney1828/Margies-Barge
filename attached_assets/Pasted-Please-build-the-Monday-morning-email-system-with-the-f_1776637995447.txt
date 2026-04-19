@@ -1,0 +1,59 @@
+Please build the Monday morning email system with the following specifications:
+
+1. Send automatically every Monday at 7:00am using Gmail SMTP with GMAIL_USER and GMAIL_APP_PASSWORD secrets.
+   - Sender name: "Margie's Barge Report"
+   - Subject: "Margie's Barge Report -- [Month Day, Year]"
+   - Recipients: all family members in the database who have Monday Email checked and an email address
+
+2. Email content in this exact order. Skip any section entirely if there is nothing to report:
+
+   HEADER
+   - Navy background (#0B3D5E), white text, anchor emoji, "Margie's Barge Report", "Lake Lanier, GA -- Week of [date]"
+
+   LAKE STATUS
+   - Current USGS lake level, clearance up and clearance down
+   - Plain language status: All Clear / Heads Up / Attention Needed
+   - One sentence description of where things stand
+
+   THIS WEEK'S WEATHER
+   - 7-day rainfall outlook from National Weather Service for Gainesville GA
+   - Flag any days with rain probability over 60% with a note to watch lake levels
+
+   NEEDS ATTENTION
+   - Any tasks overdue or due within 14 days
+   - Show task name, days overdue or days remaining, last done by who and when
+   - Only show this section if something is actually due or overdue
+
+   COMING UP IN THE NEXT 30 DAYS
+   - Tasks due between 15 and 30 days from now
+   - Show task name and due date
+   - Only show if something is in this window
+
+   BRING NEXT TIME
+   - Full current bring list with item name, who added it, and date added
+   - Only show if list has items on it
+
+   OPEN ISSUES
+   - Any issues in the photo feed still marked as open
+   - Show issue caption, who posted it, and date posted
+   - Only show if open issues exist
+
+   RECENT ACTIVITY
+   - All activity logged since the previous Monday
+   - Format: "[Name] [action] on [date]"
+   - Only show if something was logged this past week
+
+   FOOTER
+   - "View the full app →" with the app URL as a link
+   - "Lake data last successfully pulled: [date and time]"
+   - Navy background matching header
+
+3. Email design:
+   - HTML formatted, clean and readable on mobile at 600px max width
+   - Navy header and footer (#0B3D5E) with white text
+   - White card sections for each content block with light grey borders and subtle rounded corners
+   - Section headers in navy bold text
+   - Warm and casual tone throughout -- this is a family communication not a corporate report
+   - Emoji icons for each section header as shown above
+
+4. Add a Send Test Email button in the admin settings screen that sends the full Monday email to just GMAIL_USER immediately so the formatting and content can be verified without waiting for Monday or emailing the whole family list.
