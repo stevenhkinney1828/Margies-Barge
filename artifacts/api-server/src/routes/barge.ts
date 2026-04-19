@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { sendEmail } from "../lib/sendEmail.js";
 import { urgentIssueHtml, bookingRemovedHtml, mondaySummaryHtml } from "../lib/emails.js";
+import { createCalendarEvent, deleteCalendarEvent } from "../lib/gcal.js";
 import {
   activityEntriesTable,
   bookingsTable,
@@ -460,6 +461,12 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
   const [booking] = await db.insert(bookingsTable).values({ personName: body.data.personName, startDate: body.data.startDate, endDate: body.data.endDate }).returning();
   await db.insert(activityEntriesTable).values({ personName: body.data.personName, action: `booked ${body.data.startDate} to ${body.data.endDate}`, actionDate: body.data.startDate });
+
+  // Create Google Calendar event — fire-and-forget; a GCal failure never blocks the booking
+  createCalendarEvent({ personName: booking.personName, startDate: body.data.startDate, endDate: body.data.endDate })
+    .then((gcalEventId) => db.update(bookingsTable).set({ googleEventId: gcalEventId }).where(eq(bookingsTable.id, booking.id)))
+    .catch((err) => console.error("Google Calendar create failed:", err));
+
   res.status(201).json({ ...booking, startDate: dateOnly(booking.startDate), endDate: dateOnly(booking.endDate), createdAt: iso(booking.createdAt) });
 });
 
@@ -470,13 +477,22 @@ router.delete("/bookings/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  // Fetch first so we have the googleEventId, then delete
+  const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, params.data.id)).limit(1);
+  if (!existing) { res.status(404).json({ error: "Booking not found" }); return; }
+
   const [booking] = await db.delete(bookingsTable).where(eq(bookingsTable.id, params.data.id)).returning();
-  if (!booking) {
-    res.status(404).json({ error: "Booking not found" });
-    return;
-  }
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
   const removedAt = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   await db.insert(activityEntriesTable).values({ personName: booking.personName, action: `removed booking ${dateOnly(booking.startDate)} to ${dateOnly(booking.endDate)}`, actionDate: new Date().toISOString().slice(0, 10) });
+
+  // Delete Google Calendar event if one was created
+  if (existing.googleEventId) {
+    deleteCalendarEvent(existing.googleEventId).catch((err) => console.error("Google Calendar delete failed:", err));
+  }
+
+  // Send removal email
   const [settingsRowForBooking] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
   const bookingEmails = settingsRowForBooking?.familyEmails ?? [];
   if (bookingEmails.length > 0) {

@@ -26,7 +26,7 @@ Margie’s Barge Report is a mobile-first React web app for the Kinney Lake Hous
 
 - Dock tab with lake level status, safe-zone clearance, lake history graph, compact weather forecast, dock adjustment logging with user-entered feet up/down clearance, automatic USGS lake level capture for the selected work date, and settings
 - Tasks tab with seasonal task logic, due status chips, task completion logging, and add-new-task flow
-- Calendar tab with family booking creation/removal and conscience-check confirmations
+- Calendar tab with family booking creation/removal, conscience-check confirmations, and Google Calendar sync (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, GOOGLE_CALENDAR_ID env vars)
 - Bring tab with shared supplies list and mark-brought activity logging
 - Issues tab with photo URL/data upload support, urgent flagging, open/all views, and resolution flow
 - Log tab with generated activity entries across all major app actions
