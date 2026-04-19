@@ -810,28 +810,4 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
   res.json({ ...updated, startDate: dateOnly(updated.startDate), endDate: dateOnly(updated.endDate), createdAt: iso(updated.createdAt) });
 });
 
-router.post("/admin/flush", async (req, res): Promise<void> => {
-  if (req.body?.token !== "flush-mbr-2026") {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
-  await db.delete(activityEntriesTable);
-  await db.delete(dockAdjustmentsTable);
-  await db.delete(bookingsTable);
-  await db.delete(bringItemsTable);
-  await db.delete(issuesTable);
-  await db.update(tasksTable).set({ lastDoneDate: null, lastDoneBy: null });
-  await db.delete(familyMembersTable);
-  await db.insert(familyMembersTable).values([
-    { name: "Steven Kinney",  email: "stevenhkinney@gmail.com",  appAccess: false, notifications: false, mondayEmail: false },
-    { name: "Charles Kinney", email: "clkinney.12@gmail.com",    appAccess: false, notifications: false, mondayEmail: false },
-    { name: "Mike Kinney",    email: "kinneyjm57@gmail.com",     appAccess: false, notifications: false, mondayEmail: false },
-    { name: "Lance Thompson", email: "clt06@ymail.com",          appAccess: false, notifications: false, mondayEmail: false },
-    { name: "Kevin Kinney",   email: "kkinney818@gmail.com",      appAccess: false, notifications: false, mondayEmail: false },
-    { name: "Travis Kinney",  email: "traviskinneywde@gmail.com", appAccess: false, notifications: false, mondayEmail: false },
-    { name: "David Kinney",   email: "davidkinney140@gmail.com",  appAccess: false, notifications: false, mondayEmail: false },
-  ]);
-  res.json({ ok: true, cleared: ["activity", "dock_adjustments", "bookings", "bring_items", "issues", "task_dates", "family_members"], inserted: { familyMembers: 7 } });
-});
-
 export default router;
