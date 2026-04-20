@@ -200,9 +200,8 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
   const selectAll  = () => setChecked(new Set(members.map(m => m.id)));
   const clearAll   = () => setChecked(new Set());
 
-  const selectedMembers = members.filter(m => checked.has(m.id));
-
   const handleText = () => {
+    const selectedMembers = members.filter(m => checked.has(m.id));
     const rawPhones = selectedMembers.map(m => m.phone).filter(Boolean) as string[];
     console.log("[QuickContact] raw phones collected:", rawPhones);
     setChecked(new Set());
@@ -230,6 +229,7 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
   };
 
   const handleEmail = () => {
+    const selectedMembers = members.filter(m => checked.has(m.id));
     const emails = selectedMembers.map(m => m.email).filter(Boolean) as string[];
     setChecked(new Set());
     if (emails.length === 0) {
