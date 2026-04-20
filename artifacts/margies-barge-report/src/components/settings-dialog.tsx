@@ -204,7 +204,7 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
     if (isMobile) {
-      window.location.href = `sms:${phones.join(isIOS ? "," : ";")}`;
+      window.location.href = `sms:/open?addresses=${phones.join(",")}`;
     } else {
       navigator.clipboard.writeText(phones.join(", "))
         .then(() => alert("Phone numbers copied to clipboard"))
