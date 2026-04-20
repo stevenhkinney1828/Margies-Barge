@@ -1,6 +1,12 @@
 import { logger } from "./logger.js";
 
-export async function recordMondayEmailSent(): Promise<void> {
+async function ensureSettingsRow(): Promise<void> {
+  const { db } = await import("@workspace/db");
+  const { settingsTable } = await import("@workspace/db");
+  await db.insert(settingsTable).values({ id: 1, familyEmails: [] }).onConflictDoNothing();
+}
+
+async function recordMondayEmailSent(): Promise<void> {
   try {
     const { db } = await import("@workspace/db");
     const { settingsTable } = await import("@workspace/db");
@@ -15,9 +21,21 @@ export async function recordMondayEmailSent(): Promise<void> {
   }
 }
 
-export async function sendMondaySummary(): Promise<void> {
+export async function getMondayEmailLastSentDate(): Promise<string | null> {
+  await ensureSettingsRow();
+  const { db } = await import("@workspace/db");
+  const { settingsTable } = await import("@workspace/db");
+  const { eq } = await import("drizzle-orm");
+  const rows = await db.select({ mondayEmailLastSentDate: settingsTable.mondayEmailLastSentDate })
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1));
+  return rows[0]?.mondayEmailLastSentDate ?? null;
+}
+
+export async function sendMondaySummary(): Promise<{ sent: boolean; recipients?: number; error?: string }> {
   try {
     logger.info("Running Monday morning email job");
+    await ensureSettingsRow();
     const { buildMondayEmailHtml } = await import("../routes/barge.js");
     const { db } = await import("@workspace/db");
     const { familyMembersTable } = await import("@workspace/db");
@@ -29,17 +47,20 @@ export async function sendMondaySummary(): Promise<void> {
     const emails = mondayMembers.map((m: { email: string | null }) => m.email).filter(Boolean) as string[];
     if (emails.length === 0) {
       logger.info("No Monday email recipients configured — skipping");
-      return;
+      return { sent: false, error: "No recipients configured" };
     }
     const { html, subject } = await buildMondayEmailHtml();
     const result = await sendEmail({ to: emails, subject, html, replyTo: emails });
     if (result.sent) {
       logger.info({ recipients: emails.length }, "Monday email sent");
       await recordMondayEmailSent();
+      return { sent: true, recipients: emails.length };
     } else {
       logger.error({ error: result.error }, "Monday email failed");
+      return { sent: false, error: result.error };
     }
   } catch (err) {
     logger.error({ err }, "Monday email job threw an error");
+    return { sent: false, error: String(err) };
   }
 }

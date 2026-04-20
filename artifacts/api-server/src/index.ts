@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { sendMondaySummary } from "./lib/mondayEmail.js";
+import { sendMondaySummary, getMondayEmailLastSentDate } from "./lib/mondayEmail.js";
 
 const rawPort = process.env["PORT"];
 
@@ -43,13 +43,7 @@ async function maybeSendMondayCatchup(): Promise<void> {
     if (hour < 7) return;
 
     const today = getTodayET();
-    const { db } = await import("@workspace/db");
-    const { settingsTable } = await import("@workspace/db");
-    const { eq } = await import("drizzle-orm");
-    const rows = await db.select({ mondayEmailLastSentDate: settingsTable.mondayEmailLastSentDate })
-      .from(settingsTable)
-      .where(eq(settingsTable.id, 1));
-    const lastSent = rows[0]?.mondayEmailLastSentDate ?? null;
+    const lastSent = await getMondayEmailLastSentDate();
     if (lastSent === today) {
       logger.info({ date: today }, "Monday email already sent today — skipping startup catch-up");
       return;
@@ -70,7 +64,7 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
-  setTimeout(() => { void maybeSendMondayCatchup(); }, 10_000);
+  void maybeSendMondayCatchup();
 });
 
 cron.schedule("0 7 * * 1", () => { void sendMondaySummary(); }, { timezone: "America/New_York" });

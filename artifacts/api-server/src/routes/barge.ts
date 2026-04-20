@@ -725,20 +725,20 @@ router.post("/cron/monday-summary", async (req, res): Promise<void> => {
     return;
   }
 
-  await ensureBootstrap();
-
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  const settingsRows = await db.select({ mondayEmailLastSentDate: settingsTable.mondayEmailLastSentDate })
-    .from(settingsTable)
-    .where(eq(settingsTable.id, 1));
-  const lastSent = settingsRows[0]?.mondayEmailLastSentDate ?? null;
+  const { getMondayEmailLastSentDate } = await import("../lib/mondayEmail.js");
+  const lastSent = await getMondayEmailLastSentDate();
   if (lastSent === today) {
     res.json({ sent: false, reason: "already_sent_today" });
     return;
   }
 
-  await sendMondaySummary();
-  res.json({ sent: true });
+  const result = await sendMondaySummary();
+  if (result.sent) {
+    res.json({ sent: true, recipients: result.recipients });
+  } else {
+    res.json({ sent: false, error: result.error });
+  }
 });
 
 router.post("/email/test", async (_req, res): Promise<void> => {
