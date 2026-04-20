@@ -189,54 +189,35 @@ function normalizePhone(phone: string): string {
 }
 
 function QuickContact({ members }: { members: FamilyMember[] }) {
-  const [checked, setChecked] = useState<Set<number>>(new Set());
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
 
-  const showFeedback = (msg: string) => {
-    setFeedback(msg);
-    setTimeout(() => setFeedback(null), 3500);
+  const toggle = (id: number) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const selectAll  = () => setChecked(new Set(members.map(m => m.id)));
-  const clearAll   = () => setChecked(new Set());
-
   const handleText = () => {
-    const selectedMembers = members.filter(m => checked.has(m.id));
-    const rawPhones = selectedMembers.map(m => m.phone).filter(Boolean) as string[];
-    console.log("[QuickContact] raw phones collected:", rawPhones);
-    setChecked(new Set());
-    if (rawPhones.length === 0) {
-      showFeedback("No phone numbers available for selected members.");
-      return;
-    }
-    const phones = rawPhones.map(normalizePhone);
-    console.log("[QuickContact] normalized phones:", phones);
-    if (isMobile()) {
-      const sep = isAndroid() ? ";" : ",";
-      const url = `sms:${phones.join(sep)}`;
-      console.log("[QuickContact] opening sms url:", url);
-      window.location.href = url;
+    const phones = members
+      .filter(m => selected.includes(m.id) && m.phone)
+      .map(m => m.phone!.replace(/\D/g, ""))
+      .filter(p => p.length >= 10);
+    if (phones.length === 0) { alert("No phone numbers available"); return; }
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = `sms:${phones.join(isIOS ? "," : ";")}`;
     } else {
-      const display = rawPhones.join(", ");
-      void navigator.clipboard.writeText(display)
-        .then(() => {
-          showFeedback("Phone numbers copied to clipboard — paste them into your messaging app.");
-        })
-        .catch(() => {
-          showFeedback("Couldn't copy automatically — please copy these numbers manually: " + display);
-        });
+      navigator.clipboard.writeText(phones.join(", ")).then(() => alert("Phone numbers copied to clipboard"));
     }
+    setSelected([]);
   };
 
   const handleEmail = () => {
-    const selectedMembers = members.filter(m => checked.has(m.id));
-    const emails = selectedMembers.map(m => m.email).filter(Boolean) as string[];
-    setChecked(new Set());
-    if (emails.length === 0) {
-      showFeedback("No email addresses available for selected members.");
-      return;
-    }
+    const emails = members
+      .filter(m => selected.includes(m.id) && m.email)
+      .map(m => m.email!);
+    if (emails.length === 0) { alert("No email addresses available"); return; }
     window.location.href = `mailto:${emails.join(",")}`;
+    setSelected([]);
   };
 
   if (members.length === 0) return null;
@@ -246,66 +227,28 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold font-sans">Quick Contact</p>
         <div className="flex gap-3">
-          <button type="button" onClick={selectAll} className="text-xs text-primary underline-offset-2 hover:underline font-sans">
-            Select All
-          </button>
-          <button type="button" onClick={clearAll} className="text-xs text-muted-foreground underline-offset-2 hover:underline font-sans">
-            Clear All
-          </button>
+          <button type="button" className="text-xs text-primary font-sans" onClick={() => setSelected(members.map(m => m.id))}>Select All</button>
+          <button type="button" className="text-xs text-muted-foreground font-sans" onClick={() => setSelected([])}>Clear All</button>
         </div>
       </div>
-
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {members.map(m => (
-          <div key={m.id} className="flex items-center gap-2.5 px-1 py-0.5">
+          <div key={m.id} className="flex items-center gap-3 py-1">
             <Checkbox
               id={`qc-${m.id}`}
-              checked={checked.has(m.id)}
-              onCheckedChange={() => {
-                setChecked(prev => {
-                  const next = new Set(prev);
-                  if (next.has(m.id)) {
-                    next.delete(m.id);
-                  } else {
-                    next.add(m.id);
-                  }
-                  return next;
-                });
-              }}
+              checked={selected.includes(m.id)}
+              onCheckedChange={() => toggle(m.id)}
             />
-            <label htmlFor={`qc-${m.id}`} className="flex-1 min-w-0 cursor-pointer">
-              <span className="text-sm font-sans font-medium text-foreground">{m.name}</span>
-              {m.phone && (
-                <span className="text-xs text-muted-foreground font-sans ml-2">{m.phone}</span>
-              )}
+            <label htmlFor={`qc-${m.id}`} className="flex-1 text-sm font-sans cursor-pointer">
+              {m.name}
+              {m.phone && <span className="text-muted-foreground ml-2 text-xs">{m.phone}</span>}
             </label>
           </div>
         ))}
       </div>
-
-      {feedback && (
-        <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2 font-sans">{feedback}</p>
-      )}
-
-      <div className="grid grid-cols-2 gap-2 pt-1">
-        <Button
-          type="button"
-          className="h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
-          disabled={checked.size === 0}
-          onClick={handleText}
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-          Text Selected
-        </Button>
-        <Button
-          type="button"
-          className="h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
-          disabled={checked.size === 0}
-          onClick={handleEmail}
-        >
-          <Mail className="w-3.5 h-3.5" />
-          Email Selected
-        </Button>
+      <div className="flex gap-2">
+        <Button type="button" size="sm" className="flex-1 h-9" onClick={handleText}>📱 Text Selected</Button>
+        <Button type="button" variant="outline" size="sm" className="flex-1 h-9" onClick={handleEmail}>✉️ Email Selected</Button>
       </div>
     </div>
   );
