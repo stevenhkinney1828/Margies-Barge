@@ -197,13 +197,6 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
     setTimeout(() => setFeedback(null), 3500);
   };
 
-  const toggle = (id: number) =>
-    setChecked(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-
   const selectAll  = () => setChecked(new Set(members.map(m => m.id)));
   const clearAll   = () => setChecked(new Set());
 
@@ -268,7 +261,17 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
             <Checkbox
               id={`qc-${m.id}`}
               checked={checked.has(m.id)}
-              onCheckedChange={() => toggle(m.id)}
+              onCheckedChange={() => {
+                setChecked(prev => {
+                  const next = new Set(prev);
+                  if (next.has(m.id)) {
+                    next.delete(m.id);
+                  } else {
+                    next.add(m.id);
+                  }
+                  return next;
+                });
+              }}
             />
             <label htmlFor={`qc-${m.id}`} className="flex-1 min-w-0 cursor-pointer">
               <span className="text-sm font-sans font-medium text-foreground">{m.name}</span>
