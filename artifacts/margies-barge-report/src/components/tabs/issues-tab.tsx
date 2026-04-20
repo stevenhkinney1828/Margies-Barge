@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { AlertTriangle, Wrench, Plus, ImageIcon, CheckCircle2, Info } from "lucide-react";
+import { AlertTriangle, Wrench, Plus, Camera, Image as ImageIcon, CheckCircle2, Info, X, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -23,7 +23,47 @@ export function IssuesTab() {
   const [caption, setCaption] = useState("");
   const [personName, setPersonName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [urgent, setUrgent] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+
+  const apiBase = import.meta.env.BASE_URL + "api";
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const reqRes = await fetch(`${apiBase}/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "application/octet-stream" }),
+      });
+      if (!reqRes.ok) throw new Error(`Could not get upload URL (${reqRes.status})`);
+      const { uploadURL, objectPath } = await reqRes.json() as { uploadURL: string; objectPath: string };
+      const putRes = await fetch(uploadURL, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
+      setPhotoUrl(`${apiBase}/storage${objectPath}`);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setCaption("");
+    setPersonName("");
+    setPhotoUrl("");
+    setUploadError(null);
+    setUrgent(false);
+  };
 
   const [resolveOpen, setResolveOpen] = useState<{isOpen: boolean, issue: any}>({isOpen: false, issue: null});
   const [resolvePerson, setResolvePerson] = useState("");
@@ -36,15 +76,12 @@ export function IssuesTab() {
     if (!caption || !personName) return;
     
     await createIssue.mutateAsync({
-      data: { caption, personName, photoUrl: photoUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=2069&auto=format&fit=crop", urgent }
+      data: { caption, personName, photoUrl: photoUrl || "", urgent }
     });
-    
+
     queryClient.invalidateQueries({ queryKey: getListIssuesQueryKey() });
     setIsOpen(false);
-    setCaption("");
-    setPersonName("");
-    setPhotoUrl("");
-    setUrgent(false);
+    resetForm();
   };
 
   const handleResolve = async (e: React.FormEvent) => {
@@ -90,12 +127,35 @@ export function IssuesTab() {
                 <Input id="personName" value={personName} onChange={(e) => setPersonName(e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="photoUrl">Photo URL (Optional)</Label>
-                <div className="flex gap-2">
-                  <Input id="photoUrl" value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="https://..." className="flex-1" />
-                  <Button type="button" variant="outline" size="icon" disabled><ImageIcon className="w-4 h-4" /></Button>
-                </div>
-                <p className="text-[10px] text-muted-foreground">Photo uploads coming soon. Paste a URL for now.</p>
+                <Label>Photo (optional)</Label>
+                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment"
+                  className="hidden" onChange={(e) => { void handleFile(e.target.files?.[0]); e.target.value = ""; }} />
+                <input ref={libraryInputRef} type="file" accept="image/*"
+                  className="hidden" onChange={(e) => { void handleFile(e.target.files?.[0]); e.target.value = ""; }} />
+                {photoUrl ? (
+                  <div className="relative rounded-lg overflow-hidden border border-border">
+                    <img src={photoUrl} alt="Issue preview" className="w-full max-h-56 object-cover" />
+                    <button type="button" onClick={() => setPhotoUrl("")}
+                      className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1.5 shadow"
+                      aria-label="Remove photo">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button type="button" variant="outline" disabled={uploading}
+                      onClick={() => cameraInputRef.current?.click()} className="h-20 flex-col gap-1">
+                      {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+                      <span className="text-xs font-sans">Take Photo</span>
+                    </Button>
+                    <Button type="button" variant="outline" disabled={uploading}
+                      onClick={() => libraryInputRef.current?.click()} className="h-20 flex-col gap-1">
+                      {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
+                      <span className="text-xs font-sans">Choose Photo</span>
+                    </Button>
+                  </div>
+                )}
+                {uploadError && <p className="text-[11px] text-destructive">{uploadError}</p>}
               </div>
               <div className="flex items-start space-x-3 p-3 bg-destructive/10 rounded-md border border-destructive/20">
                 <Checkbox id="urgent" checked={urgent} onCheckedChange={(c) => setUrgent(!!c)} />
@@ -103,8 +163,8 @@ export function IssuesTab() {
                   Mark as Urgent (Needs immediate attention)
                 </label>
               </div>
-              <Button type="submit" variant="destructive" className="w-full" disabled={createIssue.isPending}>
-                Submit Report
+              <Button type="submit" variant="destructive" className="w-full" disabled={createIssue.isPending || uploading}>
+                {uploading ? "Uploading photo…" : "Submit Report"}
               </Button>
             </form>
           </DialogContent>
