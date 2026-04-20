@@ -1,0 +1,120 @@
+The phone field exists in the database schema (barge_family_members.phone) but is completely missing from the frontend and the Quick Contact section was never built. Please make these exact changes:
+
+1. IN artifacts/api-server/src/routes/barge.ts
+Confirm phone is included in FamilyMemberBody zod schema and familyMemberResponse. If not add it:
+- Add to FamilyMemberBody: phone: z.string().optional().nullable()
+- Add to familyMemberResponse: phone: m.phone ?? null
+- Add to POST /family-members insert: phone: parsed.data.phone ?? null
+- Add to PATCH /family-members/:id update: phone: parsed.data.phone !== undefined ? (parsed.data.phone ?? null) : existing[0].phone
+
+2. IN artifacts/margies-barge-report/src/components/settings-dialog.tsx make ALL of these changes:
+
+A. Add phone to the FamilyMember interface:
+   phone: string | null;
+
+B. Add phone state and input to MemberForm:
+   - Add: const [phone, setPhone] = useState(initial?.phone ?? "")
+   - Add phone input field below the email field:
+     Label: "Phone (optional)", type="tel", placeholder="(555) 867-5309"
+   - Include phone in onSave: phone: phone.trim() || null
+
+C. Add phone display to MemberRow below email:
+   {member.phone && <p className="font-sans text-xs text-muted-foreground">{member.phone}</p>}
+
+D. Add Quick Contact state to SettingsDialog:
+   const [qcSelected, setQcSelected] = useState<number[]>([])
+
+E. Add entire Quick Contact section to the JSX inside DialogContent, placed between the Family Members section and the Monday Summary section:
+
+<div className="border-t pt-4 space-y-3 mt-2">
+  <div className="flex items-center justify-between">
+    <p className="text-sm font-semibold font-sans">Quick Contact</p>
+    <div className="flex gap-3">
+      <button
+        type="button"
+        className="text-xs text-primary font-sans"
+        onClick={() => setQcSelected(members.map(m => m.id))}
+      >
+        Select All
+      </button>
+      <button
+        type="button"
+        className="text-xs text-muted-foreground font-sans"
+        onClick={() => setQcSelected([])}
+      >
+        Clear All
+      </button>
+    </div>
+  </div>
+
+  <div className="space-y-2">
+    {members.map(m => (
+      <div key={m.id} className="flex items-center gap-3 py-1">
+        <Checkbox
+          id={`qc-${m.id}`}
+          checked={qcSelected.includes(m.id)}
+          onCheckedChange={checked => {
+            setQcSelected(prev =>
+              checked ? [...prev, m.id] : prev.filter(id => id !== m.id)
+            )
+          }}
+        />
+        <label htmlFor={`qc-${m.id}`} className="flex-1 text-sm font-sans cursor-pointer">
+          {m.name}
+          {m.phone && <span className="text-muted-foreground ml-2 text-xs">{m.phone}</span>}
+        </label>
+      </div>
+    ))}
+  </div>
+
+  <div className="flex gap-2">
+    <Button
+      type="button"
+      size="sm"
+      className="flex-1 h-9"
+      onClick={() => {
+        const phones = members
+          .filter(m => qcSelected.includes(m.id) && m.phone)
+          .map(m => m.phone!.replace(/\D/g, ""))
+          .filter(p => p.length >= 10);
+        if (phones.length === 0) {
+          alert("No phone numbers available for selected members");
+          return;
+        }
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+          const separator = isIOS ? "," : ";";
+          window.location.href = `sms:${phones.join(separator)}`;
+        } else {
+          navigator.clipboard.writeText(phones.join(", "));
+          alert("Phone numbers copied to clipboard — paste them into your messaging app");
+        }
+        setQcSelected([]);
+      }}
+    >
+      📱 Text Selected
+    </Button>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="flex-1 h-9"
+      onClick={() => {
+        const emails = members
+          .filter(m => qcSelected.includes(m.id) && m.email)
+          .map(m => m.email!);
+        if (emails.length === 0) {
+          alert("No email addresses available for selected members");
+          return;
+        }
+        window.location.href = `mailto:${emails.join(",")}`;
+        setQcSelected([]);
+      }}
+    >
+      ✉️ Email Selected
+    </Button>
+  </div>
+</div>
+
+3. Do not change anything else in either file. Do not remove any existing sections.
