@@ -201,15 +201,12 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
       .map(m => m.phone!.replace(/\D/g, ""))
       .filter(p => p.length >= 10);
     if (phones.length === 0) { alert("No phone numbers available"); return; }
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-    if (isMobile) {
-      window.location.href = `sms:/open?addresses=${phones.join(",")}`;
-    } else {
-      navigator.clipboard.writeText(phones.join(", "))
-        .then(() => alert("Phone numbers copied to clipboard"))
-        .catch(() => alert("Copy failed — numbers: " + phones.join(", ")));
-    }
+
+    const display = phones.join(", ");
+    navigator.clipboard.writeText(display)
+      .then(() => alert("📱 Phone numbers copied! Open Messages, start a new group text, and paste."))
+      .catch(() => alert("Numbers to copy manually: " + display));
+
     setSelected([]);
   };
 
