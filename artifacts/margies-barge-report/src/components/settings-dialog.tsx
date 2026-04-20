@@ -197,29 +197,32 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
 
   const handleText = () => {
     const phones = selectedMembers.map(m => m.phone).filter(Boolean) as string[];
+    setChecked(new Set());
     if (phones.length === 0) {
       showFeedback("No phone numbers available for selected members.");
       return;
     }
     if (isMobile()) {
-      const joined = phones.join(";");
-      window.location.href = `sms:${joined}`;
+      window.location.href = `sms:${phones.join(";")}`;
     } else {
-      void navigator.clipboard.writeText(phones.join(", ")).then(() => {
-        showFeedback("Phone numbers copied to clipboard — paste them into your messaging app.");
-      });
+      void navigator.clipboard.writeText(phones.join(", "))
+        .then(() => {
+          showFeedback("Phone numbers copied to clipboard — paste them into your messaging app.");
+        })
+        .catch(() => {
+          showFeedback("Couldn't copy automatically — please copy these numbers manually: " + phones.join(", "));
+        });
     }
-    setChecked(new Set());
   };
 
   const handleEmail = () => {
     const emails = selectedMembers.map(m => m.email).filter(Boolean) as string[];
+    setChecked(new Set());
     if (emails.length === 0) {
       showFeedback("No email addresses available for selected members.");
       return;
     }
     window.location.href = `mailto:${emails.join(",")}`;
-    setChecked(new Set());
   };
 
   if (members.length === 0) return null;
