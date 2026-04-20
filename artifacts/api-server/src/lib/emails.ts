@@ -72,21 +72,35 @@ export function mondaySummaryHtml(opts: {
   };
   const si = statusInfo[lakeStatus] ?? statusInfo["WARNING"];
 
+  const upperColor = toUpperDock != null && toUpperDock < 0 ? "#dc2626" : toUpperDock != null && toUpperDock < 1 ? "#b45309" : "#0e7490";
+  const lowerColor = toLowerDock != null && toLowerDock < 0 ? "#dc2626" : toLowerDock != null && toLowerDock < 1 ? "#b45309" : "#0e7490";
+
+  const clearanceBlock = (toUpperDock == null && toLowerDock == null)
+    ? `<div style="background:#f8fafc;border-radius:6px;padding:14px 18px;text-align:center;">
+         <div style="${BODY_TEXT}color:#64748b;">Log a dock move to see how much clearance you have to your upper and lower dock limits.</div>
+       </div>`
+    : `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:8px 0;margin-top:4px;">
+         <tr>
+           <td width="50%" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px;text-align:center;">
+             <div style="font-family:sans-serif;font-size:11px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">↑ To Upper Limit</div>
+             <div style="font-family:Georgia,serif;font-size:32px;font-weight:700;color:${upperColor};line-height:1;">${toUpperDock != null ? `${toUpperDock.toFixed(2)}'` : "—"}</div>
+             ${upperDockLimit != null ? `<div style="${MUTED}margin-top:6px;">limit at ${upperDockLimit.toFixed(2)}'</div>` : ""}
+           </td>
+           <td width="50%" style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;text-align:center;">
+             <div style="font-family:sans-serif;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">↓ To Lower Limit</div>
+             <div style="font-family:Georgia,serif;font-size:32px;font-weight:700;color:${lowerColor};line-height:1;">${toLowerDock != null ? `${toLowerDock.toFixed(2)}'` : "—"}</div>
+             ${lowerDockLimit != null ? `<div style="${MUTED}margin-top:6px;">limit at ${lowerDockLimit.toFixed(2)}'</div>` : ""}
+           </td>
+         </tr>
+       </table>`;
+
   const lakeSection = card("⚓", "Lake Status", `
-    <div style="background:${si.bg};border-radius:6px;padding:14px 18px;display:flex;gap:20px;align-items:flex-start;">
-      <div style="flex-shrink:0;">
-        <div style="font-size:30px;font-weight:700;color:${si.color};font-family:sans-serif;line-height:1;">${lakeElevation.toFixed(2)}'</div>
-        <div style="font-family:sans-serif;font-size:12px;font-weight:700;color:${si.color};margin-top:2px;text-transform:uppercase;letter-spacing:.04em;">${si.label}</div>
-      </div>
-      <div>
-        <div style="${BODY_TEXT}margin:0;">${si.description}</div>
-        <div style="${MUTED}margin-top:6px;">
-          ${toUpperDock != null ? `${toUpperDock.toFixed(2)}' to upper dock limit${upperDockLimit != null ? ` (${upperDockLimit.toFixed(2)}')` : ""}` : ""}
-          ${toLowerDock != null ? `&nbsp;·&nbsp;${toLowerDock.toFixed(2)}' to lower dock limit${lowerDockLimit != null ? ` (${lowerDockLimit.toFixed(2)}')` : ""}` : ""}
-          ${toUpperDock == null && toLowerDock == null ? `Log a dock adjustment to see clearance to your dock limits.` : ""}
-        </div>
-      </div>
-    </div>`);
+    <div style="background:${si.bg};border-radius:8px;padding:18px 20px;text-align:center;margin-bottom:10px;">
+      <div style="font-family:sans-serif;font-size:11px;font-weight:700;color:${si.color};text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Current Lake Level &nbsp;·&nbsp; ${si.label}</div>
+      <div style="font-family:Georgia,serif;font-size:48px;font-weight:700;color:${si.color};line-height:1;">${lakeElevation.toFixed(2)}<span style="font-size:24px;font-weight:400;">ft</span></div>
+      <div style="${BODY_TEXT}color:${si.color};margin-top:8px;opacity:.85;">${si.description}</div>
+    </div>
+    ${clearanceBlock}`);
 
   const rainDays = weatherDays.slice(0, 7);
   const highRainDays = rainDays.filter(w => (w.rainProbability ?? 0) > 60);

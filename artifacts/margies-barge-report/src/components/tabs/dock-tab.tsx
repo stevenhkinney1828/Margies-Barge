@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Anchor, ArrowUp, ArrowDown, History, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Label as ChartLabel } from "recharts";
 
 export function DockTab() {
   const { data: dashboard, isLoading, error } = useGetDashboard();
@@ -237,38 +237,65 @@ export function DockTab() {
       </div>
 
       {/* ── 30-day trend ──────────────────────────────────────────────────── */}
-      {lakeHistory && lakeHistory.length > 0 && (
+      {lakeHistory && lakeHistory.length > 0 && (() => {
+        const elevations = lakeHistory.map((p) => p.elevation);
+        const dataMin = Math.min(...elevations);
+        const dataMax = Math.max(...elevations);
+        const yLow  = Math.min(dataMin, lowerDockLimit ?? dataMin) - 0.5;
+        const yHigh = Math.max(dataMax, upperDockLimit ?? dataMax) + 0.5;
+        return (
         <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-5 pt-4 pb-3 border-b border-border/50">
-            <History className="w-4 h-4 text-primary" />
-            <h2 className="font-serif text-base font-semibold">30-Day Trend</h2>
+          <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-border/50">
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-primary" />
+              <h2 className="font-serif text-base font-semibold">30-Day Lake Level</h2>
+            </div>
+            {upperDockLimit != null && lowerDockLimit != null && (
+              <span className="text-[10px] text-muted-foreground font-sans">
+                Safe range: {lowerDockLimit.toFixed(2)}'–{upperDockLimit.toFixed(2)}'
+              </span>
+            )}
           </div>
-          <div className="h-[190px] pt-3 pr-3 pb-1">
+          <div className="h-[230px] pt-4 pr-5 pb-1 pl-1">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={lakeHistory.slice(-30)} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <LineChart data={lakeHistory.slice(-30)} margin={{ top: 8, right: 60, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
-                <XAxis dataKey="date" tickFormatter={(v) => format(new Date(v), "M/d")} axisLine={false} tickLine={false}
-                  tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} dy={8} interval="preserveStartEnd" />
-                <YAxis domain={["dataMin - 0.3", "dataMax + 0.3"]} axisLine={false} tickLine={false}
-                  tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} tickFormatter={(v) => v.toFixed(0)} />
+                <XAxis dataKey="date" tickFormatter={(v) => format(new Date(v + "T12:00:00"), "M/d")} axisLine={false} tickLine={false}
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} dy={8} interval="preserveStartEnd" minTickGap={28} />
+                <YAxis domain={[yLow, yHigh]} axisLine={false} tickLine={false}
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  tickFormatter={(v) => v.toFixed(1)} width={48} />
                 <Tooltip contentStyle={{ borderRadius: "8px", border: "1px solid var(--border)", fontSize: "12px" }}
-                  labelFormatter={(v) => format(new Date(v), "MMM d")}
+                  labelFormatter={(v) => format(new Date(v + "T12:00:00"), "MMM d")}
                   formatter={(v: number) => [`${v.toFixed(2)}'`, "Elevation"]} />
-                {upperDockLimit != null && <ReferenceLine y={upperDockLimit} stroke="#10b981" strokeDasharray="4 3" strokeWidth={1.5} />}
-                {lowerDockLimit != null && <ReferenceLine y={lowerDockLimit} stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1.5} />}
+                {upperDockLimit != null && lowerDockLimit != null && (
+                  <ReferenceArea y1={lowerDockLimit} y2={upperDockLimit} fill="#10b981" fillOpacity={0.06} />
+                )}
+                {upperDockLimit != null && (
+                  <ReferenceLine y={upperDockLimit} stroke="#dc2626" strokeDasharray="5 4" strokeWidth={1.5}>
+                    <ChartLabel value={`Upper ${upperDockLimit.toFixed(2)}'`} position="right" fill="#dc2626"
+                      style={{ fontSize: 10, fontWeight: 700, fontFamily: "system-ui" }} />
+                  </ReferenceLine>
+                )}
+                {lowerDockLimit != null && (
+                  <ReferenceLine y={lowerDockLimit} stroke="#d97706" strokeDasharray="5 4" strokeWidth={1.5}>
+                    <ChartLabel value={`Lower ${lowerDockLimit.toFixed(2)}'`} position="right" fill="#d97706"
+                      style={{ fontSize: 10, fontWeight: 700, fontFamily: "system-ui" }} />
+                  </ReferenceLine>
+                )}
                 <Line type="monotone" dataKey="elevation" stroke="hsl(var(--primary))" strokeWidth={2.5}
                   dot={false} activeDot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-          {upperDockLimit != null && (
-            <p className="px-5 pb-3 text-[10px] text-muted-foreground font-sans">
-              <span className="text-emerald-600 font-semibold">— </span>upper dock limit ({upperDockLimit.toFixed(2)}')
-              &nbsp;·&nbsp;<span className="text-amber-500 font-semibold">— </span>lower dock limit ({lowerDockLimit?.toFixed(2)}')
+          {upperDockLimit == null && (
+            <p className="px-5 pb-3 text-[10px] text-muted-foreground font-sans italic">
+              Log a dock move to overlay your upper and lower dock limits on the chart.
             </p>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Weather forecast ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
