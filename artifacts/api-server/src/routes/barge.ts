@@ -254,9 +254,12 @@ async function fetchLakeHistory() {
     if (!response.ok) throw new Error(`USGS history returned ${response.status}`);
     const json = await response.json() as { value?: { timeSeries?: Array<{ values?: Array<{ value?: Array<{ value: string; dateTime: string }> }> }> } };
     const values = json.value?.timeSeries?.[0]?.values?.[0]?.value ?? [];
+    if (values.length === 0) throw new Error("USGS history returned no readings");
     const byDate = new Map<string, number>();
     for (const item of values) byDate.set(item.dateTime.slice(0, 10), Number(item.value));
-    return Array.from(byDate.entries()).slice(-30).map(([date, elevation]) => ({ date, elevation }));
+    const points = Array.from(byDate.entries()).slice(-30).map(([date, elevation]) => ({ date, elevation }));
+    if (points.length === 0) throw new Error("USGS history yielded no daily points");
+    return points;
   } catch {
     return Array.from({ length: 30 }, (_, index) => ({
       date: addDays(new Date().toISOString().slice(0, 10), index - 29),
