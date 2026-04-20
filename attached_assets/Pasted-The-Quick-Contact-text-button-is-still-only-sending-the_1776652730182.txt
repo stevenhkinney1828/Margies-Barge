@@ -1,0 +1,67 @@
+The Quick Contact text button is still only sending the first person's phone number despite multiple fix attempts. Rather than patching the existing broken code, please completely rewrite just the QuickContact component from scratch using a simple array of selected IDs instead of a Set. Use useState<number[]>([]) for the selection state. Here is the exact implementation to use:
+
+function QuickContact({ members }: { members: FamilyMember[] }) {
+  const [selected, setSelected] = useState<number[]>([]);
+
+  const toggle = (id: number) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleText = () => {
+    const phones = members
+      .filter(m => selected.includes(m.id) && m.phone)
+      .map(m => m.phone!.replace(/\D/g, ""))
+      .filter(p => p.length >= 10);
+    if (phones.length === 0) { alert("No phone numbers available"); return; }
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = `sms:${phones.join(isIOS ? "," : ";")}`;
+    } else {
+      navigator.clipboard.writeText(phones.join(", ")).then(() => alert("Phone numbers copied to clipboard"));
+    }
+    setSelected([]);
+  };
+
+  const handleEmail = () => {
+    const emails = members
+      .filter(m => selected.includes(m.id) && m.email)
+      .map(m => m.email!);
+    if (emails.length === 0) { alert("No email addresses available"); return; }
+    window.location.href = `mailto:${emails.join(",")}`;
+    setSelected([]);
+  };
+
+  return (
+    <div className="border-t pt-4 space-y-3 mt-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold font-sans">Quick Contact</p>
+        <div className="flex gap-3">
+          <button type="button" className="text-xs text-primary font-sans" onClick={() => setSelected(members.map(m => m.id))}>Select All</button>
+          <button type="button" className="text-xs text-muted-foreground font-sans" onClick={() => setSelected([])}>Clear All</button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {members.map(m => (
+          <div key={m.id} className="flex items-center gap-3 py-1">
+            <Checkbox
+              id={`qc-${m.id}`}
+              checked={selected.includes(m.id)}
+              onCheckedChange={() => toggle(m.id)}
+            />
+            <label htmlFor={`qc-${m.id}`} className="flex-1 text-sm font-sans cursor-pointer">
+              {m.name}
+              {m.phone && <span className="text-muted-foreground ml-2 text-xs">{m.phone}</span>}
+            </label>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Button type="button" size="sm" className="flex-1 h-9" onClick={handleText}>📱 Text Selected</Button>
+        <Button type="button" variant="outline" size="sm" className="flex-1 h-9" onClick={handleEmail}>✉️ Email Selected</Button>
+      </div>
+    </div>
+  );
+}
+
+Replace the existing QuickContact component entirely with this. Do not change anything else in the file.
