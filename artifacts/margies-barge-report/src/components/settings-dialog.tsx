@@ -206,7 +206,9 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
     if (isMobile) {
       window.location.href = `sms:${phones.join(isIOS ? "," : ";")}`;
     } else {
-      navigator.clipboard.writeText(phones.join(", ")).then(() => alert("Phone numbers copied to clipboard"));
+      navigator.clipboard.writeText(phones.join(", "))
+        .then(() => alert("Phone numbers copied to clipboard"))
+        .catch(() => alert("Copy failed — numbers: " + phones.join(", ")));
     }
     setSelected([]);
   };
