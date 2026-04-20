@@ -42,7 +42,7 @@ async function sendMondaySummary() {
       return;
     }
     const { html, subject } = await buildMondayEmailHtml();
-    const result = await sendEmail({ to: emails, subject, html });
+    const result = await sendEmail({ to: emails, subject, html, replyTo: emails });
     if (result.sent) {
       logger.info({ recipients: emails.length }, "Monday email sent");
     } else {
