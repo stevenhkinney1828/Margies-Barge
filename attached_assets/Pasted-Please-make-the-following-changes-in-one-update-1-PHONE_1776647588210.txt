@@ -1,0 +1,36 @@
+Please make the following changes in one update:
+
+1. PHONE NUMBER IN FAMILY MEMBERS
+Add an optional phone number field to each family member card in admin settings. Display it below the email field. Format should accept any standard US phone number.
+
+2. QUICK CONTACT SECTION IN SETTINGS
+Add a new section in the admin settings screen called "Quick Contact" -- place it below the Family Members section. It works like this:
+   - Shows a list of all family members with their name and phone number (if entered)
+   - Each person has a checkbox next to their name
+   - A Select All and Clear All link at the top of the list
+   - Two buttons at the bottom of the section:
+
+   Button 1: 📱 Text Selected
+   - On mobile: opens the native SMS app using a sms: link and pre-populates the To field with phone numbers of all checked family members who have a phone number entered
+   - On desktop: instead of trying to open an SMS app, copy all selected phone numbers to the clipboard and show a small toast message: "Phone numbers copied to clipboard -- paste them into your messaging app"
+   - Detect mobile vs desktop using the userAgent or a touch detection check
+   - If a checked person has no phone number, skip them silently
+   - If no checked people have phone numbers show a brief message: "No phone numbers available for selected members"
+
+   Button 2: ✉️ Email Selected
+   - Opens the native mail app using a mailto: link
+   - Pre-populates the To field with email addresses of all checked family members who have an email address entered
+   - If a checked person has no email, skip them silently
+   - If no checked people have emails show a brief message: "No email addresses available for selected members"
+
+   - Checkboxes reset to unchecked after either button is tapped so the next use starts fresh
+   - This section is only visible inside admin settings -- not visible to regular app users
+
+3. REPLY-TO ON MONDAY EMAIL
+When sending the Monday morning email set the Reply-To header to all family members who have Monday Email checked and an email address. When any recipient hits Reply their email app will pre-populate the To field with all Monday email recipients. They can remove anyone before sending if they choose.
+
+4. DESIGN
+   - Quick Contact section should match the rest of the admin settings visual style
+   - Checkboxes should be the same style as the rest of the app
+   - Buttons should be navy background with white text, matching the primary button style throughout the app
+   - Keep the section clean and compact
