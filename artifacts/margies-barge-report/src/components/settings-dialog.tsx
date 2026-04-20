@@ -169,8 +169,16 @@ function MemberRow({
 
 // ── Quick Contact ─────────────────────────────────────────────────────────────
 
+function isIOS(): boolean {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function isAndroid(): boolean {
+  return /Android/i.test(navigator.userAgent);
+}
+
 function isMobile(): boolean {
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+  return isIOS() || isAndroid() ||
     ("ontouchstart" in window && navigator.maxTouchPoints > 1);
 }
 
@@ -203,7 +211,8 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
       return;
     }
     if (isMobile()) {
-      window.location.href = `sms:${phones.join(";")}`;
+      const sep = isAndroid() ? ";" : ",";
+      window.location.href = `sms:${phones.join(sep)}`;
     } else {
       void navigator.clipboard.writeText(phones.join(", "))
         .then(() => {
