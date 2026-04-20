@@ -4,8 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Settings as SettingsIcon, Mail, CheckCircle, XCircle, Loader2,
-  Plus, Pencil, Trash2, X, Check,
+  Settings as SettingsIcon, Mail, MessageSquare, CheckCircle, XCircle, Loader2,
+  Plus, Pencil, Trash2, Check,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 
@@ -17,6 +17,7 @@ interface FamilyMember {
   id: number;
   name: string;
   email: string | null;
+  phone: string | null;
   appAccess: boolean;
   notifications: boolean;
   mondayEmail: boolean;
@@ -52,11 +53,12 @@ function MemberForm({
   onCancel: () => void;
   saving: boolean;
 }) {
-  const [name, setName]                 = useState(initial?.name ?? "");
-  const [email, setEmail]               = useState(initial?.email ?? "");
-  const [appAccess, setAppAccess]       = useState(initial?.appAccess ?? false);
-  const [notifications, setNotifs]      = useState(initial?.notifications ?? false);
-  const [mondayEmail, setMonday]        = useState(initial?.mondayEmail ?? false);
+  const [name, setName]            = useState(initial?.name ?? "");
+  const [email, setEmail]          = useState(initial?.email ?? "");
+  const [phone, setPhone]          = useState(initial?.phone ?? "");
+  const [appAccess, setAppAccess]  = useState(initial?.appAccess ?? false);
+  const [notifications, setNotifs] = useState(initial?.notifications ?? false);
+  const [mondayEmail, setMonday]   = useState(initial?.mondayEmail ?? false);
 
   const hasEmail = email.trim().length > 0;
 
@@ -65,6 +67,7 @@ function MemberForm({
     onSave({
       name: name.trim(),
       email: hasEmail ? email.trim() : null,
+      phone: phone.trim() || null,
       appAccess,
       notifications: hasEmail && notifications,
       mondayEmail: hasEmail && mondayEmail,
@@ -82,6 +85,11 @@ function MemberForm({
           <Label className="text-xs">Email (optional)</Label>
           <Input value={email} onChange={e => setEmail(e.target.value)} type="email" className="h-9" placeholder="jane@..." />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">Phone (optional)</Label>
+        <Input value={phone} onChange={e => setPhone(e.target.value)} type="tel" className="h-9" placeholder="(555) 867-5309" />
       </div>
 
       <div className="space-y-2 pt-1">
@@ -129,6 +137,7 @@ function MemberRow({
         <div>
           <p className="font-sans text-sm font-semibold text-foreground">{member.name}</p>
           {member.email && <p className="font-sans text-xs text-muted-foreground">{member.email}</p>}
+          {member.phone && <p className="font-sans text-xs text-muted-foreground">{member.phone}</p>}
         </div>
         <div className="flex gap-1 shrink-0">
           <button onClick={onEdit} className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground">
@@ -153,6 +162,123 @@ function MemberRow({
             </span>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Quick Contact ─────────────────────────────────────────────────────────────
+
+function isMobile(): boolean {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    ("ontouchstart" in window && navigator.maxTouchPoints > 1);
+}
+
+function QuickContact({ members }: { members: FamilyMember[] }) {
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const showFeedback = (msg: string) => {
+    setFeedback(msg);
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
+  const toggle = (id: number) =>
+    setChecked(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const selectAll  = () => setChecked(new Set(members.map(m => m.id)));
+  const clearAll   = () => setChecked(new Set());
+
+  const selectedMembers = members.filter(m => checked.has(m.id));
+
+  const handleText = () => {
+    const phones = selectedMembers.map(m => m.phone).filter(Boolean) as string[];
+    if (phones.length === 0) {
+      showFeedback("No phone numbers available for selected members.");
+      return;
+    }
+    if (isMobile()) {
+      const joined = phones.join(";");
+      window.location.href = `sms:${joined}`;
+    } else {
+      void navigator.clipboard.writeText(phones.join(", ")).then(() => {
+        showFeedback("Phone numbers copied to clipboard — paste them into your messaging app.");
+      });
+    }
+    setChecked(new Set());
+  };
+
+  const handleEmail = () => {
+    const emails = selectedMembers.map(m => m.email).filter(Boolean) as string[];
+    if (emails.length === 0) {
+      showFeedback("No email addresses available for selected members.");
+      return;
+    }
+    window.location.href = `mailto:${emails.join(",")}`;
+    setChecked(new Set());
+  };
+
+  if (members.length === 0) return null;
+
+  return (
+    <div className="border-t pt-4 space-y-3 mt-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold font-sans">Quick Contact</p>
+        <div className="flex gap-3">
+          <button type="button" onClick={selectAll} className="text-xs text-primary underline-offset-2 hover:underline font-sans">
+            Select All
+          </button>
+          <button type="button" onClick={clearAll} className="text-xs text-muted-foreground underline-offset-2 hover:underline font-sans">
+            Clear All
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        {members.map(m => (
+          <div key={m.id} className="flex items-center gap-2.5 px-1 py-0.5">
+            <Checkbox
+              id={`qc-${m.id}`}
+              checked={checked.has(m.id)}
+              onCheckedChange={() => toggle(m.id)}
+            />
+            <label htmlFor={`qc-${m.id}`} className="flex-1 min-w-0 cursor-pointer">
+              <span className="text-sm font-sans font-medium text-foreground">{m.name}</span>
+              {m.phone && (
+                <span className="text-xs text-muted-foreground font-sans ml-2">{m.phone}</span>
+              )}
+            </label>
+          </div>
+        ))}
+      </div>
+
+      {feedback && (
+        <p className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2 font-sans">{feedback}</p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <Button
+          type="button"
+          className="h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
+          disabled={checked.size === 0}
+          onClick={handleText}
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          Text Selected
+        </Button>
+        <Button
+          type="button"
+          className="h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
+          disabled={checked.size === 0}
+          onClick={handleEmail}
+        >
+          <Mail className="w-3.5 h-3.5" />
+          Email Selected
+        </Button>
       </div>
     </div>
   );
@@ -311,6 +437,9 @@ export function SettingsDialog() {
             </div>
           )}
         </div>
+
+        {/* ── Quick Contact ── */}
+        {!loadingM && <QuickContact members={members} />}
 
         {/* ── Monday Summary ── */}
         <div className="border-t pt-4 space-y-2 mt-2">

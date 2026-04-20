@@ -87,6 +87,7 @@ export const familyMembersTable = pgTable("barge_family_members", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email"),
+  phone: text("phone"),
   appAccess: boolean("app_access").notNull().default(false),
   notifications: boolean("notifications").notNull().default(false),
   mondayEmail: boolean("monday_email").notNull().default(false),

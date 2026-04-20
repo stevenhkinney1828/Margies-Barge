@@ -4,6 +4,7 @@ export async function sendEmail(opts: {
   to: string[];
   subject: string;
   html: string;
+  replyTo?: string[];
 }): Promise<{ sent: boolean; error?: string }> {
   if (opts.to.length === 0) return { sent: false, error: "No recipients" };
   try {
@@ -17,6 +18,7 @@ export async function sendEmail(opts: {
     await transporter.sendMail({
       from: `"Margie's Barge Report" <${user}>`,
       to: opts.to.join(", "),
+      ...(opts.replyTo && opts.replyTo.length > 0 ? { replyTo: opts.replyTo.join(", ") } : {}),
       subject: opts.subject,
       html: opts.html,
     });

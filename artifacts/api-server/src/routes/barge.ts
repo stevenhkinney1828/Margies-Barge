@@ -709,7 +709,7 @@ router.post("/email/monday-summary", async (_req, res): Promise<void> => {
     return;
   }
   const { html, subject } = await buildMondayEmailHtml();
-  const result = await sendEmail({ to: emails, subject, html });
+  const result = await sendEmail({ to: emails, subject, html, replyTo: emails });
   if (result.sent) {
     res.json({ sent: true, recipients: emails.length });
   } else {
@@ -738,6 +738,7 @@ router.post("/email/test", async (_req, res): Promise<void> => {
 const FamilyMemberBody = z.object({
   name: z.string().min(1),
   email: z.string().email().optional().nullable(),
+  phone: z.string().optional().nullable(),
   appAccess: z.boolean().optional().default(false),
   notifications: z.boolean().optional().default(false),
   mondayEmail: z.boolean().optional().default(false),
@@ -749,6 +750,7 @@ function familyMemberResponse(m: typeof familyMembersTable.$inferSelect) {
     id: m.id,
     name: m.name,
     email: m.email ?? null,
+    phone: m.phone ?? null,
     appAccess: m.appAccess,
     notifications: m.notifications,
     mondayEmail: m.mondayEmail,
@@ -769,6 +771,7 @@ router.post("/family-members", async (req, res): Promise<void> => {
   const [member] = await db.insert(familyMembersTable).values({
     name: parsed.data.name,
     email: parsed.data.email ?? null,
+    phone: parsed.data.phone ?? null,
     appAccess: parsed.data.appAccess ?? false,
     notifications: parsed.data.notifications ?? false,
     mondayEmail: parsed.data.mondayEmail ?? false,
@@ -786,6 +789,7 @@ router.patch("/family-members/:id", async (req, res): Promise<void> => {
   const [updated] = await db.update(familyMembersTable).set({
     name: parsed.data.name ?? existing[0].name,
     email: parsed.data.email !== undefined ? (parsed.data.email ?? null) : existing[0].email,
+    phone: parsed.data.phone !== undefined ? (parsed.data.phone ?? null) : existing[0].phone,
     appAccess: parsed.data.appAccess ?? existing[0].appAccess,
     notifications: parsed.data.notifications ?? existing[0].notifications,
     mondayEmail: parsed.data.mondayEmail ?? existing[0].mondayEmail,
