@@ -516,7 +516,7 @@ router.delete("/bookings/:id", async (req, res): Promise<void> => {
     sendEmail({
       to: notifEmails,
       subject: `📅 Dates back open at the lake house`,
-      html: bookingRemovedHtml({ personName: booking.personName, startDate: dateOnly(booking.startDate) ?? "", endDate: dateOnly(booking.endDate) ?? "" }),
+      html: bookingRemovedHtml({ personName: booking.personName, startDate: dateOnly(booking.startDate) ?? "", endDate: dateOnly(booking.endDate) ?? "", appUrl: process.env.APP_URL ?? "https://margies-barge.replit.app" }),
     }).catch(() => void 0);
   }
   res.sendStatus(204);
@@ -585,7 +585,7 @@ router.post("/issues", async (req, res): Promise<void> => {
       sendEmail({
         to: urgentEmails,
         subject: `🚨 Urgent Issue at the Lake House: ${body.data.caption}`,
-        html: urgentIssueHtml({ reportedBy: body.data.personName, caption: body.data.caption, photoUrl: body.data.photoUrl }),
+        html: urgentIssueHtml({ reportedBy: body.data.personName, caption: body.data.caption, photoUrl: body.data.photoUrl, appUrl: process.env.APP_URL ?? "https://margies-barge.replit.app" }),
       }).catch(() => void 0);
     }
   }
@@ -615,7 +615,7 @@ router.post("/issues/:id/resolve", async (req, res): Promise<void> => {
       sendEmail({
         to: resolveEmails,
         subject: `✅ Urgent issue resolved at the lake house`,
-        html: urgentIssueResolvedHtml({ resolvedBy: body.data.personName, resolutionNote: body.data.resolutionNote }),
+        html: urgentIssueResolvedHtml({ resolvedBy: body.data.personName, resolutionNote: body.data.resolutionNote, appUrl: process.env.APP_URL ?? "https://margies-barge.replit.app" }),
       }).catch(() => void 0);
     }
   }

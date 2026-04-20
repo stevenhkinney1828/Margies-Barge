@@ -230,8 +230,9 @@ export function urgentIssueHtml(opts: {
   reportedBy: string;
   caption: string;
   photoUrl: string;
+  appUrl: string;
 }): string {
-  const { reportedBy, caption, photoUrl } = opts;
+  const { reportedBy, caption, photoUrl, appUrl } = opts;
   return `<!DOCTYPE html><html><body style="font-family:Georgia,serif;background:#f1f5f9;padding:24px;color:#1e293b;">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
   <div style="background:#dc2626;padding:20px 24px;">
@@ -244,6 +245,9 @@ export function urgentIssueHtml(opts: {
     <p style="margin:0 0 20px;font-size:16px;">${caption}</p>
     ${photoUrl ? `<img src="${photoUrl}" alt="Issue photo" style="max-width:100%;border-radius:8px;margin-top:8px;" />` : ""}
   </div>
+  <div style="background:${NAVY};padding:22px 24px;text-align:center;">
+    <a href="${appUrl}" style="display:inline-block;color:#ffffff;font-family:sans-serif;font-size:15px;font-weight:600;text-decoration:none;padding:10px 24px;border:2px solid rgba(255,255,255,.4);border-radius:6px;">View in app &rarr;</a>
+  </div>
 </div>
 </body></html>`;
 }
@@ -251,8 +255,9 @@ export function urgentIssueHtml(opts: {
 export function urgentIssueResolvedHtml(opts: {
   resolvedBy: string;
   resolutionNote: string;
+  appUrl: string;
 }): string {
-  const { resolvedBy, resolutionNote } = opts;
+  const { resolvedBy, resolutionNote, appUrl } = opts;
   return `<!DOCTYPE html><html><body style="font-family:Georgia,serif;background:#f1f5f9;padding:24px;color:#1e293b;">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
   <div style="background:#16a34a;padding:20px 24px;">
@@ -265,6 +270,9 @@ export function urgentIssueResolvedHtml(opts: {
     </p>
     <p style="margin:0;font-size:15px;color:#334155;font-style:italic;">"${resolutionNote}"</p>
   </div>
+  <div style="background:${NAVY};padding:22px 24px;text-align:center;">
+    <a href="${appUrl}" style="display:inline-block;color:#ffffff;font-family:sans-serif;font-size:15px;font-weight:600;text-decoration:none;padding:10px 24px;border:2px solid rgba(255,255,255,.4);border-radius:6px;">View in app &rarr;</a>
+  </div>
 </div>
 </body></html>`;
 }
@@ -273,8 +281,9 @@ export function bookingRemovedHtml(opts: {
   personName: string;
   startDate: string;
   endDate: string;
+  appUrl: string;
 }): string {
-  const { personName, startDate, endDate } = opts;
+  const { personName, startDate, endDate, appUrl } = opts;
   return `<!DOCTYPE html><html><body style="font-family:Georgia,serif;background:#f1f5f9;padding:24px;color:#1e293b;">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
   <div style="background:${NAVY};padding:20px 24px;">
@@ -287,6 +296,9 @@ export function bookingRemovedHtml(opts: {
       <strong>${fmtDate(startDate)}</strong> to <strong>${fmtDate(endDate)}</strong> at the lake.
       Those days are open again if anyone wants them!
     </p>
+  </div>
+  <div style="background:${NAVY};padding:22px 24px;text-align:center;border-top:1px solid rgba(255,255,255,.15);">
+    <a href="${appUrl}" style="display:inline-block;color:#ffffff;font-family:sans-serif;font-size:15px;font-weight:600;text-decoration:none;padding:10px 24px;border:2px solid rgba(255,255,255,.4);border-radius:6px;">View in app &rarr;</a>
   </div>
 </div>
 </body></html>`;
