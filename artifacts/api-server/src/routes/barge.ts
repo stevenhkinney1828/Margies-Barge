@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { sendEmail } from "../lib/sendEmail.js";
+import { sendMondaySummary } from "../lib/mondayEmail.js";
 import { urgentIssueHtml, urgentIssueResolvedHtml, bookingRemovedHtml, mondaySummaryHtml } from "../lib/emails.js";
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from "../lib/gcal.js";
 import {
@@ -736,23 +737,8 @@ router.post("/cron/monday-summary", async (req, res): Promise<void> => {
     return;
   }
 
-  const mondayMembers = await db.select().from(familyMembersTable)
-    .where(and(eq(familyMembersTable.mondayEmail, true)));
-  const emails = mondayMembers.map(m => m.email).filter(Boolean) as string[];
-  if (emails.length === 0) {
-    res.status(400).json({ sent: false, error: "No family members have Monday Email enabled." });
-    return;
-  }
-  const { html, subject } = await buildMondayEmailHtml();
-  const result = await sendEmail({ to: emails, subject, html, replyTo: emails });
-  if (result.sent) {
-    await db.update(settingsTable)
-      .set({ mondayEmailLastSentDate: today })
-      .where(eq(settingsTable.id, 1));
-    res.json({ sent: true, recipients: emails.length });
-  } else {
-    res.status(500).json({ sent: false, error: result.error });
-  }
+  await sendMondaySummary();
+  res.json({ sent: true });
 });
 
 router.post("/email/test", async (_req, res): Promise<void> => {
