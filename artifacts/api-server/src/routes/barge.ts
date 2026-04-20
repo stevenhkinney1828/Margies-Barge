@@ -717,6 +717,44 @@ router.post("/email/monday-summary", async (_req, res): Promise<void> => {
   }
 });
 
+router.post("/cron/monday-summary", async (req, res): Promise<void> => {
+  const cronSecret = process.env["CRON_SECRET"];
+  if (!cronSecret || req.headers["x-cron-secret"] !== cronSecret) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  await ensureBootstrap();
+
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const settingsRows = await db.select({ mondayEmailLastSentDate: settingsTable.mondayEmailLastSentDate })
+    .from(settingsTable)
+    .where(eq(settingsTable.id, 1));
+  const lastSent = settingsRows[0]?.mondayEmailLastSentDate ?? null;
+  if (lastSent === today) {
+    res.json({ sent: false, reason: "already_sent_today" });
+    return;
+  }
+
+  const mondayMembers = await db.select().from(familyMembersTable)
+    .where(and(eq(familyMembersTable.mondayEmail, true)));
+  const emails = mondayMembers.map(m => m.email).filter(Boolean) as string[];
+  if (emails.length === 0) {
+    res.status(400).json({ sent: false, error: "No family members have Monday Email enabled." });
+    return;
+  }
+  const { html, subject } = await buildMondayEmailHtml();
+  const result = await sendEmail({ to: emails, subject, html, replyTo: emails });
+  if (result.sent) {
+    await db.update(settingsTable)
+      .set({ mondayEmailLastSentDate: today })
+      .where(eq(settingsTable.id, 1));
+    res.json({ sent: true, recipients: emails.length });
+  } else {
+    res.status(500).json({ sent: false, error: result.error });
+  }
+});
+
 router.post("/email/test", async (_req, res): Promise<void> => {
   await ensureBootstrap();
   const testEmail = process.env.GMAIL_USER;
