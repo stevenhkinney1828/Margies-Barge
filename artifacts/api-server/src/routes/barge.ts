@@ -436,8 +436,9 @@ router.post("/dock-adjustments", async (req, res): Promise<void> => {
     return;
   }
   const today = new Date().toISOString().slice(0, 10);
+  const daysAgo = Math.floor((new Date(today).getTime() - new Date(body.data.workDate).getTime()) / 86_400_000);
   const historicalLake = await fetchLakeLevelForDate(body.data.workDate);
-  const currentLake = historicalLake == null && body.data.workDate === today ? await fetchLake({ upperDockLimit: null, lowerDockLimit: null }) : null;
+  const currentLake = historicalLake == null && daysAgo >= 0 && daysAgo <= 7 ? await fetchLake({ upperDockLimit: null, lowerDockLimit: null }) : null;
   const lakeForDate = historicalLake ?? (currentLake == null ? null : { elevation: currentLake.elevation, pulledAt: currentLake.pulledAt });
   const [adjustment] = await db.insert(dockAdjustmentsTable).values({
     personName: body.data.personName,
