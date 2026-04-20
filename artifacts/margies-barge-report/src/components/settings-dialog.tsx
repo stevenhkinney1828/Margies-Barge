@@ -182,6 +182,12 @@ function isMobile(): boolean {
     ("ontouchstart" in window && navigator.maxTouchPoints > 1);
 }
 
+function normalizePhone(phone: string): string {
+  const hasLeadingPlus = phone.trimStart().startsWith("+");
+  const digitsOnly = phone.replace(/\D/g, "");
+  return hasLeadingPlus ? `+${digitsOnly}` : digitsOnly;
+}
+
 function QuickContact({ members }: { members: FamilyMember[] }) {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -204,22 +210,28 @@ function QuickContact({ members }: { members: FamilyMember[] }) {
   const selectedMembers = members.filter(m => checked.has(m.id));
 
   const handleText = () => {
-    const phones = selectedMembers.map(m => m.phone).filter(Boolean) as string[];
+    const rawPhones = selectedMembers.map(m => m.phone).filter(Boolean) as string[];
+    console.log("[QuickContact] raw phones collected:", rawPhones);
     setChecked(new Set());
-    if (phones.length === 0) {
+    if (rawPhones.length === 0) {
       showFeedback("No phone numbers available for selected members.");
       return;
     }
+    const phones = rawPhones.map(normalizePhone);
+    console.log("[QuickContact] normalized phones:", phones);
     if (isMobile()) {
       const sep = isAndroid() ? ";" : ",";
-      window.location.href = `sms:${phones.join(sep)}`;
+      const url = `sms:${phones.join(sep)}`;
+      console.log("[QuickContact] opening sms url:", url);
+      window.location.href = url;
     } else {
-      void navigator.clipboard.writeText(phones.join(", "))
+      const display = rawPhones.join(", ");
+      void navigator.clipboard.writeText(display)
         .then(() => {
           showFeedback("Phone numbers copied to clipboard — paste them into your messaging app.");
         })
         .catch(() => {
-          showFeedback("Couldn't copy automatically — please copy these numbers manually: " + phones.join(", "));
+          showFeedback("Couldn't copy automatically — please copy these numbers manually: " + display);
         });
     }
   };
